@@ -221,7 +221,7 @@ func (r *TableRenderer) renderRow(b *strings.Builder, row []string, colWidths []
 			style = r.theme.HeaderStyle
 		}
 		if x == cursorX && y == cursorY {
-			style = r.theme.SelectedRowStyle.Copy().Inherit(style)
+			style = style.Copy().Inherit(r.theme.SelectedRowStyle)
 		}
 
 		b.WriteString(style.Render(content))

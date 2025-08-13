@@ -19,7 +19,7 @@ func DefaultTheme() *Theme {
 	return &Theme{
 		Name:             "default",
 		HeaderStyle:      lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("205")),
-		CellStyle:        lipgloss.NewStyle().Padding(0, 1),
+		CellStyle:        lipgloss.NewStyle(),
 		HighlightStyle:   lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("220")),
 		BorderColor:      lipgloss.Color("240"),
 		SelectedRowStyle: lipgloss.NewStyle().Background(lipgloss.Color("238")),
@@ -33,7 +33,7 @@ func DarkTheme() *Theme {
 	return &Theme{
 		Name:             "dark",
 		HeaderStyle:      lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("39")),
-		CellStyle:        lipgloss.NewStyle().Padding(0, 1).Foreground(lipgloss.Color("252")),
+		CellStyle:        lipgloss.NewStyle().Foreground(lipgloss.Color("252")),
 		HighlightStyle:   lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("226")),
 		BorderColor:      lipgloss.Color("238"),
 		SelectedRowStyle: lipgloss.NewStyle().Background(lipgloss.Color("236")),
@@ -47,7 +47,7 @@ func LightTheme() *Theme {
 	return &Theme{
 		Name:             "light",
 		HeaderStyle:      lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("25")),
-		CellStyle:        lipgloss.NewStyle().Padding(0, 1).Foreground(lipgloss.Color("235")),
+		CellStyle:        lipgloss.NewStyle().Foreground(lipgloss.Color("235")),
 		HighlightStyle:   lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("196")),
 		BorderColor:      lipgloss.Color("244"),
 		SelectedRowStyle: lipgloss.NewStyle().Background(lipgloss.Color("254")),
@@ -61,7 +61,7 @@ func MinimalTheme() *Theme {
 	return &Theme{
 		Name:             "minimal",
 		HeaderStyle:      lipgloss.NewStyle().Bold(true),
-		CellStyle:        lipgloss.NewStyle().Padding(0, 1),
+		CellStyle:        lipgloss.NewStyle(),
 		HighlightStyle:   lipgloss.NewStyle().Bold(true),
 		BorderColor:      lipgloss.Color("250"),
 		SelectedRowStyle: lipgloss.NewStyle().Underline(true),

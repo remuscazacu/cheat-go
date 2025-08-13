@@ -13,12 +13,14 @@
 ### ✨ Features
 
 - 🚀 **Fast & Lightweight** - Built with Go for minimal resource usage
-- 🎨 **Beautiful TUI** - Modern terminal interface with themes and styling
+- 🎨 **Beautiful TUI** - Modern terminal interface with multiple themes and table styles
 - ⌨️ **Vim-style Navigation** - Support for both arrow keys and hjkl movement
 - 📦 **Configurable** - YAML-based configuration with sensible defaults
 - 🔧 **Extensible** - Easy to add custom applications and shortcuts
 - 🌐 **Unicode Support** - Full support for international characters and emojis
 - 📊 **Multiple Views** - Tabular display across multiple applications
+- 🎭 **Multiple Themes** - Default, dark, light, and minimal theme options
+- 📋 **Table Styles** - Simple, rounded, bold, and minimal table styles
 
 ### 🎯 Supported Applications
 
@@ -112,6 +114,37 @@ cheat-go
 | `q` | Quit application |
 | `Ctrl+C` | Force quit |
 
+## 🎨 Themes and Styling
+
+cheat-go offers multiple visual themes and table styles to customize your experience:
+
+### Available Themes
+
+- **default** - Standard theme with balanced colors
+- **dark** - High-contrast dark theme for dark terminals
+- **light** - Clean light theme for light terminals  
+- **minimal** - Minimalist theme with reduced visual elements
+
+### Available Table Styles
+
+- **simple** - Clean borders with horizontal and vertical lines
+- **rounded** - Elegant rounded corners for a modern look
+- **bold** - Thick borders for enhanced visibility
+- **minimal** - Minimal borders with spacing-based separation
+
+### Theme Examples
+
+```bash
+# Use different themes
+cheat-go --theme dark
+cheat-go --theme light
+cheat-go --theme minimal
+
+# Combine with different table styles
+cheat-go --theme dark --table-style rounded
+cheat-go --theme minimal --table-style minimal
+```
+
 ## ⚙️ Configuration
 
 cheat-go supports configuration through YAML files. The application looks for configuration files in the following order:
@@ -132,14 +165,14 @@ apps:
   - lf
   - zathura
 
-theme: default  # or "dark"
+theme: default  # options: "default", "dark", "light", "minimal"
 
 layout:
   columns:
     - shortcut
     - description
   show_categories: false
-  table_style: simple
+  table_style: simple  # options: "simple", "rounded", "bold", "minimal"
   max_width: 120
 
 keybinds:
@@ -203,7 +236,7 @@ cheat-go/
 
 - **Apps Package** - Manages application definitions and shortcut data
 - **Config Package** - Handles configuration loading and validation
-- **UI Package** - Provides table rendering and theming capabilities
+- **UI Package** - Provides table rendering, multiple themes, and table styling capabilities
 - **Main** - Coordinates the TUI application using Bubble Tea
 
 ## 🧪 Development
@@ -232,7 +265,7 @@ go build .
 
 ### Testing
 
-The project includes a comprehensive test suite with 94.3% coverage:
+The project includes a comprehensive test suite with 94.3% coverage and specialized layout tests:
 
 ```bash
 # Run all tests
@@ -247,6 +280,9 @@ go test ./... -race
 # Generate coverage report
 go test ./... -coverprofile=coverage.out
 go tool cover -html=coverage.out -o coverage.html
+
+# Run specific UI tests (including layout alignment tests)
+go test ./pkg/ui -v
 ```
 
 ### Code Quality
@@ -327,7 +363,8 @@ Contributions are welcome! Please feel free to submit a Pull Request. For major 
 - [ ] Interactive tutorial mode
 - [ ] Fuzzy search across applications
 - [ ] Shortcut categories and filtering
-- [ ] Multiple theme support
+- [x] Multiple theme support (default, dark, light, minimal)
+- [x] Multiple table styles (simple, rounded, bold, minimal)
 - [ ] Application profiles (work, gaming, etc.)
 
 ### Version History
@@ -335,6 +372,7 @@ Contributions are welcome! Please feel free to submit a Pull Request. For major 
 - **v0.1.0** - Initial release with basic TUI functionality
 - **v0.2.0** - Added configuration system and custom apps
 - **v0.3.0** - Comprehensive test suite and improved error handling
+- **v0.4.0** - Enhanced UI with multiple table styles and improved themes
 
 ## 🐛 Troubleshooting
 
@@ -352,7 +390,8 @@ Contributions are welcome! Please feel free to submit a Pull Request. For major 
 
 **Q: Display issues in terminal**
 - Ensure terminal supports Unicode
-- Try different themes (default vs dark)
+- Try different themes: `default`, `dark`, `light`, or `minimal`
+- Try different table styles: `simple`, `rounded`, `bold`, or `minimal`
 - Check terminal size (minimum 80x24 recommended)
 
 ### Reporting Issues

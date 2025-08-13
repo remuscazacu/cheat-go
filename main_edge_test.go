@@ -24,7 +24,7 @@ func TestInitialModel_ConfigLoadErrors(t *testing.T) {
 	os.WriteFile("config.yaml", []byte(invalidConfig), 0644)
 
 	// Should still initialize successfully with warnings
-	m := initialModel()
+	m := initialModelWithDefaults()
 
 	if m.registry == nil {
 		t.Error("should initialize registry even with config errors")
@@ -59,7 +59,7 @@ func TestInitialModel_AppLoadErrors(t *testing.T) {
 	os.WriteFile("config.yaml", configData, 0644)
 
 	// Should still initialize successfully
-	m := initialModel()
+	m := initialModelWithDefaults()
 
 	if m.registry == nil {
 		t.Error("should initialize registry even with app load errors")
@@ -91,7 +91,7 @@ func TestInitialModel_ErrorLogging(t *testing.T) {
 	configData, _ := yaml.Marshal(testConfig)
 	os.WriteFile("config.yaml", configData, 0644)
 
-	m := initialModel()
+	m := initialModelWithDefaults()
 
 	// Model should still be functional
 	if m.registry == nil || m.config == nil || m.renderer == nil {
@@ -113,7 +113,7 @@ func TestInitialModel_DefaultPaths(t *testing.T) {
 	// Change to empty directory
 	os.Chdir(tmpDir)
 
-	m := initialModel()
+	m := initialModelWithDefaults()
 
 	// Should use all defaults
 	defaultConfig := config.DefaultConfig()
@@ -135,7 +135,7 @@ func TestInitialModel_DefaultPaths(t *testing.T) {
 }
 
 func TestModel_Update_ExtensiveKeyHandling(t *testing.T) {
-	m := initialModel()
+	m := initialModelWithDefaults()
 
 	// Test all key types that should be handled
 	keyTests := []struct {
