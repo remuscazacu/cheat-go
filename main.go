@@ -3,40 +3,54 @@ package main
 import (
 	"fmt"
 	"os"
-	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
-	"github.com/mattn/go-runewidth"
-)
 
-var (
-	headerStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("205"))
-	cellStyle   = lipgloss.NewStyle().Padding(0, 0)
+	"cheat-go/pkg/apps"
+	"cheat-go/pkg/config"
+	"cheat-go/pkg/ui"
 )
 
 type model struct {
-	rows    [][]string
-	cursorX int
-	cursorY int
+	registry *apps.Registry
+	config   *config.Config
+	renderer *ui.TableRenderer
+	rows     [][]string
+	cursorX  int
+	cursorY  int
 }
 
 func initialModel() model {
+	// Load configuration
+	loader := config.NewLoader("")
+	cfg, err := loader.Load()
+	if err != nil {
+		// Log error but continue with defaults
+		fmt.Fprintf(os.Stderr, "Warning: Could not load config (%v), using defaults\n", err)
+		cfg = config.DefaultConfig()
+	}
+
+	// Initialize app registry
+	registry := apps.NewRegistry(cfg.DataDir)
+	if err := registry.LoadApps(cfg.Apps); err != nil {
+		// Log warning but continue with hardcoded data
+		fmt.Fprintf(os.Stderr, "Warning: Could not load some apps (%v), using defaults\n", err)
+	}
+
+	// Create theme and renderer
+	theme := ui.GetTheme(cfg.Theme)
+	renderer := ui.NewTableRenderer(theme)
+
+	// Generate table data
+	rows := registry.GetTableData(cfg.Apps)
+
 	return model{
-		rows: [][]string{
-			{"Shortcut", "vim", "zsh", "dwm", "st", "lf", "zathura"},
-			{"h", "← move", "back char", "focus left", "← move", "left", "scroll ←"},
-			{"l", "→ move", "forward char", "focus right", "→ move", "right", "scroll →"},
-			{"j", "↓ move", "down history", "focus down", "↓ scroll", "down", "scroll ↓"},
-			{"k", "↑ move", "up history", "focus up", "↑ scroll", "up", "scroll ↑"},
-			{"gg", "top", "-", "-", "-", "top", "-"},
-			{"G", "bottom", "-", "-", "-", "bottom", "-"},
-			{"/", "search", "search history", "-", "search", "search", "search"},
-			{":", "command", "prompt", "command", "-", "command", "-"},
-			{"q", "quit", "exit", "close win", "exit", "quit", "quit"},
-		},
-		cursorX: 0,
-		cursorY: 1,
+		registry: registry,
+		config:   cfg,
+		renderer: renderer,
+		rows:     rows,
+		cursorX:  0,
+		cursorY:  1,
 	}
 }
 
@@ -72,53 +86,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m model) View() string {
-	var b strings.Builder
-
-	// Determine column widths using runewidth
-	colWidths := make([]int, len(m.rows[0]))
-	for _, row := range m.rows {
-		for i, cell := range row {
-			if w := runewidth.StringWidth(cell); w > colWidths[i] {
-				colWidths[i] = w
-			}
-		}
-	}
-
-	// Render rows
-	for y, row := range m.rows {
-		for x, cell := range row {
-			cellWidth := runewidth.StringWidth(cell)
-			pad := colWidths[x] - cellWidth
-			content := " " + cell + strings.Repeat(" ", pad) + " "
-
-			style := cellStyle
-			if y == 0 {
-				style = headerStyle
-			}
-			if x == m.cursorX && y == m.cursorY {
-				style = style.Reverse(true)
-			}
-
-			b.WriteString(style.Render(content))
-			if x < len(row)-1 {
-				b.WriteString("│")
-			}
-		}
-		b.WriteString("\n")
-
-		if y == 0 {
-			for i, w := range colWidths {
-				b.WriteString(strings.Repeat("─", w+2))
-				if i < len(colWidths)-1 {
-					b.WriteString("┼")
-				}
-			}
-			b.WriteString("\n")
-		}
-	}
-
-	b.WriteString("\nUse arrow keys or hjkl to move. Press q to quit.")
-	return b.String()
+	return m.renderer.RenderWithInstructions(m.rows, m.cursorX, m.cursorY)
 }
 
 func main() {
