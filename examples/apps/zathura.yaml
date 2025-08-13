@@ -1,0 +1,47 @@
+name: "zathura"
+description: "Document viewer with vim-like keybindings"
+version: "1.0"
+categories:
+  - "viewer"
+  - "document"
+  - "pdf"
+shortcuts:
+  - keys: "h"
+    description: "scroll left"
+    category: "scrolling"
+    tags: ["navigation", "scroll"]
+  - keys: "l"
+    description: "scroll right"
+    category: "scrolling"
+    tags: ["navigation", "scroll"]
+  - keys: "j"
+    description: "scroll down"
+    category: "scrolling"
+    tags: ["navigation", "scroll"]
+  - keys: "k"
+    description: "scroll up"
+    category: "scrolling"
+    tags: ["navigation", "scroll"]
+  - keys: "gg"
+    description: "go to first page"
+    category: "navigation"
+    tags: ["navigation", "page"]
+  - keys: "G"
+    description: "go to last page"
+    category: "navigation"
+    tags: ["navigation", "page"]
+  - keys: "/"
+    description: "search in document"
+    category: "search"
+    tags: ["search", "document"]
+  - keys: ":"
+    description: "command mode"
+    category: "command"
+    tags: ["command", "mode"]
+  - keys: "q"
+    description: "quit viewer"
+    category: "control"
+    tags: ["exit", "basic"]
+metadata:
+  url: "https://pwmt.org/projects/zathura"
+  config_file: "~/.config/zathura/zathurarc"

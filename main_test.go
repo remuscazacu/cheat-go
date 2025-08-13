@@ -14,7 +14,7 @@ import (
 
 func TestInitialModel(t *testing.T) {
 	// Test basic model initialization
-	m := initialModel()
+	m := initialModelWithDefaults()
 
 	if m.registry == nil {
 		t.Error("model should have registry initialized")
@@ -77,7 +77,7 @@ func TestInitialModel_WithConfigFile(t *testing.T) {
 	os.Chdir(tmpDir)
 	os.Rename(configPath, "config.yaml")
 
-	m := initialModel()
+	m := initialModelWithDefaults()
 
 	if len(m.config.Apps) != 2 {
 		t.Errorf("expected 2 apps from config, got %d", len(m.config.Apps))
@@ -89,7 +89,7 @@ func TestInitialModel_WithConfigFile(t *testing.T) {
 }
 
 func TestModel_Init(t *testing.T) {
-	m := initialModel()
+	m := initialModelWithDefaults()
 
 	cmd := m.Init()
 	if cmd != nil {
@@ -98,7 +98,7 @@ func TestModel_Init(t *testing.T) {
 }
 
 func TestModel_Update_Quit(t *testing.T) {
-	m := initialModel()
+	m := initialModelWithDefaults()
 
 	// Test quit with 'q'
 	quitMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}}
@@ -124,7 +124,7 @@ func TestModel_Update_Quit(t *testing.T) {
 }
 
 func TestModel_Update_Navigation(t *testing.T) {
-	m := initialModel()
+	m := initialModelWithDefaults()
 	originalY := m.cursorY
 	originalX := m.cursorX
 
@@ -170,7 +170,7 @@ func TestModel_Update_Navigation(t *testing.T) {
 }
 
 func TestModel_Update_VimNavigation(t *testing.T) {
-	m := initialModel()
+	m := initialModelWithDefaults()
 
 	// Test vim-style navigation
 	jMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}}
@@ -212,7 +212,7 @@ func TestModel_Update_VimNavigation(t *testing.T) {
 }
 
 func TestModel_Update_Boundaries(t *testing.T) {
-	m := initialModel()
+	m := initialModelWithDefaults()
 
 	// Move cursor to top-left
 	m.cursorX = 0
@@ -256,7 +256,7 @@ func TestModel_Update_Boundaries(t *testing.T) {
 }
 
 func TestModel_Update_UnknownKey(t *testing.T) {
-	m := initialModel()
+	m := initialModelWithDefaults()
 	originalX := m.cursorX
 	originalY := m.cursorY
 
@@ -275,7 +275,7 @@ func TestModel_Update_UnknownKey(t *testing.T) {
 }
 
 func TestModel_View(t *testing.T) {
-	m := initialModel()
+	m := initialModelWithDefaults()
 
 	view := m.View()
 
@@ -295,7 +295,7 @@ func TestModel_View(t *testing.T) {
 }
 
 func TestModel_Integration(t *testing.T) {
-	m := initialModel()
+	m := initialModelWithDefaults()
 
 	// Test a sequence of operations
 	keys := []tea.KeyMsg{
@@ -322,7 +322,7 @@ func TestModel_Integration(t *testing.T) {
 }
 
 func TestModel_EmptyTable(t *testing.T) {
-	m := initialModel()
+	m := initialModelWithDefaults()
 	m.rows = [][]string{} // Force empty table
 
 	view := m.View()
@@ -333,7 +333,7 @@ func TestModel_EmptyTable(t *testing.T) {
 }
 
 func TestModel_SingleRowTable(t *testing.T) {
-	m := initialModel()
+	m := initialModelWithDefaults()
 	m.rows = [][]string{{"Header"}} // Only header
 
 	// Navigation should handle single row gracefully
@@ -347,7 +347,7 @@ func TestModel_SingleRowTable(t *testing.T) {
 }
 
 func TestModel_Structure(t *testing.T) {
-	m := initialModel()
+	m := initialModelWithDefaults()
 
 	// Test model structure
 	if m.registry == nil {
@@ -377,7 +377,7 @@ func TestModel_Structure(t *testing.T) {
 }
 
 func TestModel_Update_KeyTypes(t *testing.T) {
-	m := initialModel()
+	m := initialModelWithDefaults()
 
 	// Test different key message types
 	testCases := []struct {

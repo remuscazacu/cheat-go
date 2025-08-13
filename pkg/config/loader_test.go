@@ -29,11 +29,19 @@ func TestLoader_Load_FromFile(t *testing.T) {
 		Apps:  []string{"test-app"},
 		Theme: "dark",
 		Layout: LayoutConfig{
-			Columns:  []string{"key", "desc"},
-			MaxWidth: 80,
+			Columns:        []string{"shortcut", "description"},
+			ShowCategories: false,
+			TableStyle:     "simple",
+			MaxWidth:       80,
 		},
-		Keybinds: map[string]string{"quit": "q"},
-		DataDir:  "/test/data",
+		Keybinds: map[string]string{
+			"quit":  "q",
+			"up":    "k",
+			"down":  "j",
+			"left":  "h",
+			"right": "l",
+		},
+		DataDir: "/test/data",
 	}
 
 	configData, err := yaml.Marshal(testConfig)
@@ -179,13 +187,22 @@ func TestLoader_ValidateAndSetDefaults_CompleteConfig(t *testing.T) {
 	// Test complete config
 	completeConfig := &Config{
 		Apps:  []string{"custom-app"},
-		Theme: "custom",
+		Theme: "dark",
 		Layout: LayoutConfig{
-			Columns:  []string{"custom"},
-			MaxWidth: 100,
+			Columns:        []string{"shortcut", "description"},
+			ShowCategories: true,
+			TableStyle:     "rounded",
+			MaxWidth:       100,
 		},
-		Keybinds: map[string]string{"custom": "c"},
-		DataDir:  "/custom/path",
+		Keybinds: map[string]string{
+			"quit":   "q",
+			"up":     "k",
+			"down":   "j",
+			"left":   "h",
+			"right":  "l",
+			"custom": "c",
+		},
+		DataDir: "/custom/path",
 	}
 
 	config, err := loader.validateAndSetDefaults(completeConfig)

@@ -1,0 +1,34 @@
+name: "dwm"
+description: "Dynamic window manager"
+version: "1.0"
+categories:
+  - "wm"
+  - "window-manager"
+shortcuts:
+  - keys: "h"
+    description: "focus window to the left"
+    category: "focus"
+    tags: ["navigation", "window"]
+  - keys: "l"
+    description: "focus window to the right"
+    category: "focus"
+    tags: ["navigation", "window"]
+  - keys: "j"
+    description: "focus next window down"
+    category: "focus"
+    tags: ["navigation", "window"]
+  - keys: "k"
+    description: "focus next window up"
+    category: "focus"
+    tags: ["navigation", "window"]
+  - keys: ":"
+    description: "run command (dmenu)"
+    category: "launcher"
+    tags: ["command", "launcher"]
+  - keys: "q"
+    description: "close focused window"
+    category: "window"
+    tags: ["close", "window"]
+metadata:
+  url: "https://dwm.suckless.org"
+  modifier_key: "Mod4 (Super)"

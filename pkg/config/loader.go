@@ -2,6 +2,7 @@ package config
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -82,14 +83,35 @@ func (l *Loader) validateAndSetDefaults(config *Config) (*Config, error) {
 
 	if len(config.Layout.Columns) == 0 {
 		config.Layout = defaults.Layout
+	} else {
+		// Merge layout defaults for missing fields
+		if config.Layout.TableStyle == "" {
+			config.Layout.TableStyle = defaults.Layout.TableStyle
+		}
+		if config.Layout.MaxWidth == 0 {
+			config.Layout.MaxWidth = defaults.Layout.MaxWidth
+		}
 	}
 
 	if len(config.Keybinds) == 0 {
 		config.Keybinds = defaults.Keybinds
+	} else {
+		// Merge keybind defaults for missing required keys
+		for key, value := range defaults.Keybinds {
+			if _, exists := config.Keybinds[key]; !exists {
+				config.Keybinds[key] = value
+			}
+		}
 	}
 
 	if config.DataDir == "" {
 		config.DataDir = defaults.DataDir
+	}
+
+	// Validate the configuration
+	validation := config.Validate()
+	if !validation.Valid {
+		return nil, fmt.Errorf("configuration validation failed: %v", validation.Errors)
 	}
 
 	return config, nil

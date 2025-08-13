@@ -1,0 +1,34 @@
+name: "st"
+description: "Simple terminal emulator"
+version: "1.0"
+categories:
+  - "terminal"
+  - "emulator"
+shortcuts:
+  - keys: "h"
+    description: "move cursor left"
+    category: "navigation"
+    tags: ["navigation", "cursor"]
+  - keys: "l"
+    description: "move cursor right"
+    category: "navigation"
+    tags: ["navigation", "cursor"]
+  - keys: "j"
+    description: "scroll down"
+    category: "scrolling"
+    tags: ["navigation", "scroll"]
+  - keys: "k"
+    description: "scroll up"
+    category: "scrolling"
+    tags: ["navigation", "scroll"]
+  - keys: "/"
+    description: "search in scrollback"
+    category: "search"
+    tags: ["search", "scrollback"]
+  - keys: "q"
+    description: "exit terminal"
+    category: "control"
+    tags: ["exit", "basic"]
+metadata:
+  url: "https://st.suckless.org"
+  config_file: "config.h"

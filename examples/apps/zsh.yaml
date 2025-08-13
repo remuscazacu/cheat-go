@@ -1,0 +1,34 @@
+name: "zsh"
+description: "Z Shell - extended Bourne shell"
+version: "1.0"
+categories:
+  - "shell"
+  - "terminal"
+shortcuts:
+  - keys: "h"
+    description: "move cursor back one character"
+    category: "editing"
+    tags: ["navigation", "basic"]
+  - keys: "l"
+    description: "move cursor forward one character"
+    category: "editing"
+    tags: ["navigation", "basic"]
+  - keys: "j"
+    description: "move down in command history"
+    category: "history"
+    tags: ["navigation", "history"]
+  - keys: "k"
+    description: "move up in command history"
+    category: "history"
+    tags: ["navigation", "history"]
+  - keys: "/"
+    description: "search command history"
+    category: "search"
+    tags: ["search", "history"]
+  - keys: "q"
+    description: "exit shell"
+    category: "control"
+    tags: ["exit", "basic"]
+metadata:
+  url: "https://zsh.sourceforge.io"
+  config_file: "~/.zshrc"
