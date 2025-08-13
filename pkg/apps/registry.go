@@ -2,8 +2,10 @@ package apps
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -11,6 +13,8 @@ import (
 var (
 	ErrAppNotFound    = errors.New("application not found")
 	ErrInvalidAppFile = errors.New("invalid app file format")
+	ErrAppValidation  = errors.New("app validation failed")
+	ErrDirectoryRead  = errors.New("failed to read app directory")
 )
 
 // Registry manages application loading and registration
@@ -36,10 +40,43 @@ func NewRegistry(dataDir string) *Registry {
 func (r *Registry) LoadApps(appNames []string) error {
 	for _, name := range appNames {
 		if err := r.LoadApp(name); err != nil {
-			// If loading from file fails, use hardcoded data
+			// Log error but continue with next app (backward compatibility)
 			continue
 		}
 	}
+	return nil
+}
+
+// LoadAllAppsFromDirectory scans the data directory and loads all available apps
+func (r *Registry) LoadAllAppsFromDirectory() error {
+	if r.dataDir == "" {
+		return nil
+	}
+
+	expandedDir := expandPath(r.dataDir)
+	entries, err := os.ReadDir(expandedDir)
+	if err != nil {
+		return fmt.Errorf("%w: %s", ErrDirectoryRead, expandedDir)
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+
+		name := entry.Name()
+		if !strings.HasSuffix(name, ".yaml") && !strings.HasSuffix(name, ".yml") {
+			continue
+		}
+
+		// Extract app name from filename
+		appName := strings.TrimSuffix(strings.TrimSuffix(name, ".yaml"), ".yml")
+		if err := r.LoadApp(appName); err != nil {
+			// Log but don't fail for individual app loading errors
+			continue
+		}
+	}
+
 	return nil
 }
 
@@ -71,10 +108,79 @@ func (r *Registry) loadAppFromFile(path string) (*App, error) {
 
 	var app App
 	if err := yaml.Unmarshal(data, &app); err != nil {
-		return nil, ErrInvalidAppFile
+		return nil, fmt.Errorf("%w: %v", ErrInvalidAppFile, err)
+	}
+
+	// Validate the loaded app
+	if err := r.validateApp(&app); err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrAppValidation, err)
 	}
 
 	return &app, nil
+}
+
+// validateApp validates an app definition
+func (r *Registry) validateApp(app *App) error {
+	var errors []error
+
+	// Required fields
+	if app.Name == "" {
+		errors = append(errors, fmt.Errorf("app name is required"))
+	}
+
+	if app.Description == "" {
+		errors = append(errors, fmt.Errorf("app description is required"))
+	}
+
+	// Validate shortcuts
+	for i, shortcut := range app.Shortcuts {
+		if shortcut.Keys == "" {
+			errors = append(errors, fmt.Errorf("shortcut %d: keys field is required", i))
+		}
+		if shortcut.Description == "" {
+			errors = append(errors, fmt.Errorf("shortcut %d: description field is required", i))
+		}
+	}
+
+	if len(errors) > 0 {
+		return fmt.Errorf("validation errors: %v", errors)
+	}
+
+	return nil
+}
+
+// SaveApp saves an app definition to a YAML file
+func (r *Registry) SaveApp(app *App) error {
+	if r.dataDir == "" {
+		return fmt.Errorf("data directory not configured")
+	}
+
+	// Validate before saving
+	if err := r.validateApp(app); err != nil {
+		return err
+	}
+
+	expandedDir := expandPath(r.dataDir)
+
+	// Ensure directory exists
+	if err := os.MkdirAll(expandedDir, 0755); err != nil {
+		return fmt.Errorf("failed to create data directory: %w", err)
+	}
+
+	appPath := filepath.Join(expandedDir, app.Name+".yaml")
+	data, err := yaml.Marshal(app)
+	if err != nil {
+		return fmt.Errorf("failed to marshal app data: %w", err)
+	}
+
+	if err := os.WriteFile(appPath, data, 0644); err != nil {
+		return fmt.Errorf("failed to write app file: %w", err)
+	}
+
+	// Register the app in memory
+	r.Register(app)
+
+	return nil
 }
 
 // loadHardcodedApps loads the original hardcoded application data

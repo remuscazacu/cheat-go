@@ -1,0 +1,46 @@
+name: "lf"
+description: "Terminal file manager inspired by ranger"
+version: "1.0"
+categories:
+  - "file-manager"
+  - "terminal"
+shortcuts:
+  - keys: "h"
+    description: "go to parent directory"
+    category: "navigation"
+    tags: ["navigation", "directory"]
+  - keys: "l"
+    description: "enter directory or open file"
+    category: "navigation"
+    tags: ["navigation", "directory", "open"]
+  - keys: "j"
+    description: "move cursor down"
+    category: "navigation"
+    tags: ["navigation", "cursor"]
+  - keys: "k"
+    description: "move cursor up"
+    category: "navigation"
+    tags: ["navigation", "cursor"]
+  - keys: "gg"
+    description: "go to top of list"
+    category: "navigation"
+    tags: ["navigation", "jumping"]
+  - keys: "G"
+    description: "go to bottom of list"
+    category: "navigation"
+    tags: ["navigation", "jumping"]
+  - keys: "/"
+    description: "search files"
+    category: "search"
+    tags: ["search", "files"]
+  - keys: ":"
+    description: "command mode"
+    category: "command"
+    tags: ["command", "mode"]
+  - keys: "q"
+    description: "quit file manager"
+    category: "control"
+    tags: ["exit", "basic"]
+metadata:
+  url: "https://github.com/gokcehan/lf"
+  config_file: "~/.config/lf/lfrc"

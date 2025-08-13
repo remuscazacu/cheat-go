@@ -1,0 +1,46 @@
+# Example configuration for cheat-go
+# Copy this to ~/.config/cheat-go/config.yaml to customize
+
+# Applications to display (order matters)
+apps:
+  - vim
+  - zsh
+  - dwm
+  - st
+  - lf
+  - zathura
+
+# Theme selection
+theme: default  # options: default, dark, light, minimal
+
+# Layout configuration
+layout:
+  # Columns to display
+  columns:
+    - shortcut
+    - description
+    - category
+  
+  # Whether to show category groupings
+  show_categories: false
+  
+  # Table style
+  table_style: simple  # options: simple, rounded, bold, minimal
+  
+  # Maximum table width
+  max_width: 120
+
+# Key bindings
+keybinds:
+  quit: q
+  up: k
+  down: j
+  left: h
+  right: l
+  search: /
+  next_app: tab
+  prev_app: shift+tab
+  toggle_help: "?"
+
+# Directory containing app definition files
+data_dir: ~/.config/cheat-go/apps

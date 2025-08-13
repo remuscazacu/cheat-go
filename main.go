@@ -40,6 +40,8 @@ func initialModel() model {
 	// Create theme and renderer
 	theme := ui.GetTheme(cfg.Theme)
 	renderer := ui.NewTableRenderer(theme)
+	renderer.SetTableStyle(cfg.Layout.TableStyle)
+	renderer.SetMaxWidth(cfg.Layout.MaxWidth)
 
 	// Generate table data
 	rows := registry.GetTableData(cfg.Apps)

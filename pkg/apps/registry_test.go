@@ -1,6 +1,7 @@
 package apps
 
 import (
+	"errors"
 	"gopkg.in/yaml.v3"
 	"os"
 	"path/filepath"
@@ -220,7 +221,7 @@ func TestRegistry_loadAppFromFile(t *testing.T) {
 	os.WriteFile(invalidPath, []byte("invalid: yaml: ["), 0644)
 
 	_, err = registry.loadAppFromFile(invalidPath)
-	if err != ErrInvalidAppFile {
+	if !errors.Is(err, ErrInvalidAppFile) {
 		t.Errorf("expected ErrInvalidAppFile, got %v", err)
 	}
 }

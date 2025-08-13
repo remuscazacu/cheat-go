@@ -1,0 +1,46 @@
+name: "vim"
+description: "Vi IMproved text editor"
+version: "1.0"
+categories:
+  - "editor"
+  - "terminal"
+shortcuts:
+  - keys: "h"
+    description: "← move cursor left"
+    category: "movement"
+    tags: ["navigation", "basic"]
+  - keys: "l"
+    description: "→ move cursor right"
+    category: "movement"
+    tags: ["navigation", "basic"]
+  - keys: "j"
+    description: "↓ move cursor down"
+    category: "movement"
+    tags: ["navigation", "basic"]
+  - keys: "k"
+    description: "↑ move cursor up"
+    category: "movement"
+    tags: ["navigation", "basic"]
+  - keys: "gg"
+    description: "go to top of file"
+    category: "movement"
+    tags: ["navigation", "jumping"]
+  - keys: "G"
+    description: "go to bottom of file"
+    category: "movement"
+    tags: ["navigation", "jumping"]
+  - keys: "/"
+    description: "search forward"
+    category: "search"
+    tags: ["search", "basic"]
+  - keys: ":"
+    description: "enter command mode"
+    category: "mode"
+    tags: ["command", "basic"]
+  - keys: "q"
+    description: "quit (in command mode: :q)"
+    category: "file"
+    tags: ["exit", "basic"]
+metadata:
+  url: "https://vim.org"
+  version_added: "8.0"
