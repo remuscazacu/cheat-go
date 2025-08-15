@@ -55,19 +55,33 @@
 			<div id="nav">
 				<select id="files">
 				
-				<option value="file0">cheat-go/main.go (76.7%)</option>
+				<option value="file0">cheat-go/main.go (60.4%)</option>
 				
-				<option value="file1">cheat-go/pkg/apps/registry.go (96.5%)</option>
+				<option value="file1">cheat-go/pkg/apps/registry.go (73.0%)</option>
 				
 				<option value="file2">cheat-go/pkg/apps/types.go (100.0%)</option>
 				
-				<option value="file3">cheat-go/pkg/config/loader.go (92.9%)</option>
+				<option value="file3">cheat-go/pkg/cache/cache.go (46.1%)</option>
 				
-				<option value="file4">cheat-go/pkg/config/types.go (100.0%)</option>
+				<option value="file4">cheat-go/pkg/config/loader.go (90.4%)</option>
 				
-				<option value="file5">cheat-go/pkg/ui/table.go (100.0%)</option>
+				<option value="file5">cheat-go/pkg/config/types.go (72.5%)</option>
 				
-				<option value="file6">cheat-go/pkg/ui/theme.go (100.0%)</option>
+				<option value="file6">cheat-go/pkg/notes/manager.go (83.9%)</option>
+				
+				<option value="file7">cheat-go/pkg/online/client.go (73.2%)</option>
+				
+				<option value="file8">cheat-go/pkg/plugins/builtin.go (27.3%)</option>
+				
+				<option value="file9">cheat-go/pkg/plugins/loader.go (75.0%)</option>
+				
+				<option value="file10">cheat-go/pkg/plugins/types.go (100.0%)</option>
+				
+				<option value="file11">cheat-go/pkg/sync/sync.go (43.7%)</option>
+				
+				<option value="file12">cheat-go/pkg/ui/table.go (95.1%)</option>
+				
+				<option value="file13">cheat-go/pkg/ui/theme.go (50.0%)</option>
 				
 				</select>
 			</div>
@@ -84,57 +98,292 @@
 		<pre class="file" id="file0" style="display: none">package main
 
 import (
+        "flag"
         "fmt"
         "os"
+        "strings"
+        "time"
 
         tea "github.com/charmbracelet/bubbletea"
 
         "cheat-go/pkg/apps"
+        "cheat-go/pkg/cache"
         "cheat-go/pkg/config"
+        "cheat-go/pkg/notes"
+        "cheat-go/pkg/online"
+        "cheat-go/pkg/plugins"
+        "cheat-go/pkg/sync"
         "cheat-go/pkg/ui"
 )
 
+const (
+        version = "v1.0.0-phase4"
+        appName = "cheat-go"
+)
+
+// View modes for Phase 4 features
+type viewMode int
+
+const (
+        viewMain viewMode = iota
+        viewNotes
+        viewPlugins
+        viewOnline
+        viewSync
+        viewHelp
+)
+
 type model struct {
-        registry *apps.Registry
-        config   *config.Config
-        renderer *ui.TableRenderer
-        rows     [][]string
-        cursorX  int
-        cursorY  int
+        // Original fields
+        registry     *apps.Registry
+        config       *config.Config
+        renderer     *ui.TableRenderer
+        rows         [][]string
+        filteredRows [][]string
+        cursorX      int
+        cursorY      int
+        searchMode   bool
+        searchQuery  string
+        lastSearch   string
+        allRows      [][]string
+        filterMode   bool
+        filteredApps []string
+        allApps      []string
+        helpMode     bool
+
+        // Phase 4 fields
+        viewMode     viewMode
+        cache        cache.Cache
+        notesManager notes.Manager
+        pluginLoader *plugins.Loader
+        onlineClient online.Client
+        syncManager  *sync.Manager
+
+        // View-specific state
+        notesList   []*notes.Note
+        pluginsList []*plugins.LoadedPlugin
+        reposList   []online.Repository
+        cheatSheets []online.CheatSheet
+        syncStatus  sync.SyncStatus
+
+        // UI state for Phase 4 views
+        noteCursor    int
+        pluginCursor  int
+        repoCursor    int
+        sheetCursor   int
+        statusMessage string
+        loading       bool
 }
 
-func initialModel() model <span class="cov8" title="1">{
+type cliOptions struct {
+        showHelp    bool
+        showVersion bool
+        theme       string
+        tableStyle  string
+        configFile  string
+}
+
+func printHelp() <span class="cov8" title="1">{
+        fmt.Printf(`%s %s - Interactive terminal cheat sheet viewer with cloud features
+
+USAGE:
+    %s [OPTIONS]
+
+DESCRIPTION:
+    A fast, interactive terminal application for displaying keyboard shortcuts 
+    and command cheat sheets. Navigate through shortcuts for popular applications
+    with plugin support, personal notes, online repositories, and cloud sync.
+
+OPTIONS:
+    -h, --help              Show this help message and exit
+    -v, --version           Show version information and exit
+    -t, --theme THEME       Set the display theme
+                            Options: default, dark, light, minimal
+                            Default: default
+    -s, --style STYLE       Set the table style  
+                            Options: simple, rounded, bold, minimal
+                            Default: simple
+    -c, --config FILE       Use custom configuration file
+                            Default: ~/.config/cheat-go/config.yaml
+
+NAVIGATION:
+    Arrow Keys / hjkl       Navigate through the table
+    /                       Search mode
+    f                       Filter apps
+    n                       Open notes manager
+    p                       Open plugin manager
+    o                       Browse online repositories
+    s                       Show sync status
+    Ctrl+S                  Force sync
+    ?                       Show help
+    q / Ctrl+C              Quit the application
+
+PHASE 4 FEATURES:
+    Notes Manager (n)       Create and manage personal notes
+    Plugin Manager (p)      Load and manage plugins
+    Online Browser (o)      Browse community cheat sheets
+    Sync Status (s)         View and manage cloud sync
+    
+THEMES:
+    default                 Balanced colors for general use
+    dark                    High-contrast for dark terminals
+    light                   Clean appearance for light terminals  
+    minimal                 Reduced visual elements
+
+TABLE STYLES:
+    simple                  Clean borders with lines
+    rounded                 Elegant rounded corners
+    bold                    Thick borders for visibility
+    minimal                 Spacing-based separation
+
+EXAMPLES:
+    %s                      # Start with default settings
+    %s --theme dark         # Use dark theme
+    %s --style rounded      # Use rounded table borders
+    %s -t dark -s bold      # Dark theme with bold borders
+    %s --config my.yaml     # Use custom config file
+
+For more information, visit: https://github.com/remuscazacu/cheat-go
+`, appName, version, appName, appName, appName, appName, appName, appName)
+}</span>
+
+func printVersion() <span class="cov8" title="1">{
+        fmt.Printf("%s %s\n", appName, version)
+}</span>
+
+func parseFlags() cliOptions <span class="cov0" title="0">{
+        var opts cliOptions
+
+        flag.BoolVar(&amp;opts.showHelp, "h", false, "Show help message")
+        flag.BoolVar(&amp;opts.showHelp, "help", false, "Show help message")
+        flag.BoolVar(&amp;opts.showVersion, "v", false, "Show version")
+        flag.BoolVar(&amp;opts.showVersion, "version", false, "Show version")
+        flag.StringVar(&amp;opts.theme, "t", "", "Theme")
+        flag.StringVar(&amp;opts.theme, "theme", "", "Theme")
+        flag.StringVar(&amp;opts.tableStyle, "s", "", "Table style")
+        flag.StringVar(&amp;opts.tableStyle, "style", "", "Table style")
+        flag.StringVar(&amp;opts.configFile, "c", "", "Configuration file path")
+        flag.StringVar(&amp;opts.configFile, "config", "", "Configuration file path")
+
+        flag.Parse()
+
+        // Validate theme option
+        if opts.theme != "" </span><span class="cov0" title="0">{
+                validThemes := []string{"default", "dark", "light", "minimal"}
+                valid := false
+                for _, t := range validThemes </span><span class="cov0" title="0">{
+                        if opts.theme == t </span><span class="cov0" title="0">{
+                                valid = true
+                                break</span>
+                        }
+                }
+                <span class="cov0" title="0">if !valid </span><span class="cov0" title="0">{
+                        fmt.Printf("Error: Invalid theme '%s'. Valid options: %s\n",
+                                opts.theme, strings.Join(validThemes, ", "))
+                        os.Exit(1)
+                }</span>
+        }
+
+        // Validate table style option
+        <span class="cov0" title="0">if opts.tableStyle != "" </span><span class="cov0" title="0">{
+                validStyles := []string{"simple", "rounded", "bold", "minimal"}
+                valid := false
+                for _, s := range validStyles </span><span class="cov0" title="0">{
+                        if opts.tableStyle == s </span><span class="cov0" title="0">{
+                                valid = true
+                                break</span>
+                        }
+                }
+                <span class="cov0" title="0">if !valid </span><span class="cov0" title="0">{
+                        fmt.Printf("Error: Invalid table style '%s'. Valid options: %s\n",
+                                opts.tableStyle, strings.Join(validStyles, ", "))
+                        os.Exit(1)
+                }</span>
+        }
+
+        <span class="cov0" title="0">return opts</span>
+}
+
+func initialModel(opts cliOptions) model <span class="cov8" title="1">{
         // Load configuration
-        loader := config.NewLoader("")
+        loader := config.NewLoader(opts.configFile)
         cfg, err := loader.Load()
         if err != nil </span><span class="cov0" title="0">{
-                // Log error but continue with defaults
-                fmt.Fprintf(os.Stderr, "Warning: Could not load config (%v), using defaults\n", err)
+                fmt.Printf("Warning: Could not load config (%v), using defaults\n", err)
                 cfg = config.DefaultConfig()
+        }</span>
+
+        // Override config with CLI options
+        <span class="cov8" title="1">if opts.theme != "" </span><span class="cov0" title="0">{
+                cfg.Theme = opts.theme
+        }</span>
+        <span class="cov8" title="1">if opts.tableStyle != "" </span><span class="cov0" title="0">{
+                cfg.Layout.TableStyle = opts.tableStyle
         }</span>
 
         // Initialize app registry
         <span class="cov8" title="1">registry := apps.NewRegistry(cfg.DataDir)
         if err := registry.LoadApps(cfg.Apps); err != nil </span><span class="cov0" title="0">{
-                // Log warning but continue with hardcoded data
-                fmt.Fprintf(os.Stderr, "Warning: Could not load some apps (%v), using defaults\n", err)
+                fmt.Printf("Warning: Could not load some apps (%v), using defaults\n", err)
         }</span>
 
         // Create theme and renderer
         <span class="cov8" title="1">theme := ui.GetTheme(cfg.Theme)
         renderer := ui.NewTableRenderer(theme)
+        renderer.SetTableStyle(cfg.Layout.TableStyle)
+        renderer.SetMaxWidth(cfg.Layout.MaxWidth)
 
         // Generate table data
         rows := registry.GetTableData(cfg.Apps)
 
-        return model{
-                registry: registry,
-                config:   cfg,
-                renderer: renderer,
-                rows:     rows,
-                cursorX:  0,
-                cursorY:  1,
+        // Initialize Phase 4 components
+        m := model{
+                registry:     registry,
+                config:       cfg,
+                renderer:     renderer,
+                rows:         rows,
+                filteredRows: rows,
+                cursorX:      0,
+                cursorY:      1,
+                searchMode:   false,
+                searchQuery:  "",
+                lastSearch:   "",
+                allRows:      rows,
+                filterMode:   false,
+                filteredApps: make([]string, 0),
+                allApps:      cfg.Apps,
+                helpMode:     false,
+                viewMode:     viewMain,
+        }
+
+        // Initialize cache
+        m.cache = cache.NewLRUCache(10*1024*1024, 1000) // 10MB, 1000 items
+
+        // Initialize notes manager
+        notesDir := os.ExpandEnv("$HOME/.config/cheat-go/notes")
+        if cfg.DataDir != "" </span><span class="cov8" title="1">{
+                notesDir = cfg.DataDir + "/notes"
         }</span>
+        <span class="cov8" title="1">m.notesManager, _ = notes.NewFileManager(notesDir)
+
+        // Initialize plugin loader
+        pluginDirs := []string{
+                os.ExpandEnv("$HOME/.config/cheat-go/plugins"),
+                "/usr/local/share/cheat-go/plugins",
+        }
+        if cfg.DataDir != "" </span><span class="cov8" title="1">{
+                pluginDirs = append([]string{cfg.DataDir + "/plugins"}, pluginDirs...)
+        }</span>
+        <span class="cov8" title="1">m.pluginLoader = plugins.NewLoader(pluginDirs...)
+        m.pluginLoader.LoadAll()
+
+        // Initialize online client (mock for now)
+        m.onlineClient = online.NewMockClient()
+
+        // Initialize sync manager (disabled by default)
+        // m.syncManager would be initialized if sync is enabled in config
+
+        return m</span>
 }
 
 func (m model) Init() tea.Cmd <span class="cov8" title="1">{
@@ -144,38 +393,743 @@ func (m model) Init() tea.Cmd <span class="cov8" title="1">{
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) <span class="cov8" title="1">{
         switch msg := msg.(type) </span>{
         case tea.KeyMsg:<span class="cov8" title="1">
-                switch msg.String() </span>{
-                case "ctrl+c", "q":<span class="cov8" title="1">
-                        return m, tea.Quit</span>
-                case "up", "k":<span class="cov8" title="1">
-                        if m.cursorY &gt; 1 </span><span class="cov8" title="1">{
-                                m.cursorY--
+                // Handle different view modes
+                switch m.viewMode </span>{
+                case viewMain:<span class="cov8" title="1">
+                        if m.searchMode </span><span class="cov8" title="1">{
+                                return m.handleSearchInput(msg)
                         }</span>
-                case "down", "j":<span class="cov8" title="1">
-                        if m.cursorY &lt; len(m.rows)-1 </span><span class="cov8" title="1">{
-                                m.cursorY++
+                        <span class="cov8" title="1">if m.filterMode </span><span class="cov8" title="1">{
+                                return m.handleFilterInput(msg)
                         }</span>
-                case "left", "h":<span class="cov8" title="1">
-                        if m.cursorX &gt; 0 </span><span class="cov8" title="1">{
-                                m.cursorX--
+                        <span class="cov8" title="1">if m.helpMode </span><span class="cov0" title="0">{
+                                return m.handleHelpInput(msg)
                         }</span>
-                case "right", "l":<span class="cov8" title="1">
-                        if m.cursorX &lt; len(m.rows[0])-1 </span><span class="cov8" title="1">{
-                                m.cursorX++
-                        }</span>
+                        <span class="cov8" title="1">return m.handleMainInput(msg)</span>
+                case viewNotes:<span class="cov8" title="1">
+                        return m.handleNotesInput(msg)</span>
+                case viewPlugins:<span class="cov8" title="1">
+                        return m.handlePluginsInput(msg)</span>
+                case viewOnline:<span class="cov8" title="1">
+                        return m.handleOnlineInput(msg)</span>
+                case viewSync:<span class="cov8" title="1">
+                        return m.handleSyncInput(msg)</span>
+                case viewHelp:<span class="cov0" title="0">
+                        return m.handleHelpInput(msg)</span>
                 }
+        }
+        <span class="cov0" title="0">return m, nil</span>
+}
+
+func (m model) handleMainInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) <span class="cov8" title="1">{
+        switch msg.String() </span>{
+        case "ctrl+c", "q":<span class="cov8" title="1">
+                return m, tea.Quit</span>
+        case "?":<span class="cov8" title="1">
+                m.helpMode = true
+                m.viewMode = viewHelp
+                return m, nil</span>
+        case "/":<span class="cov8" title="1">
+                m.searchMode = true
+                return m, nil</span>
+        case "f", "ctrl+f":<span class="cov8" title="1">
+                m.filterMode = true
+                return m, nil</span>
+        case "n":<span class="cov8" title="1">
+                // Open notes manager
+                m.viewMode = viewNotes
+                m.loadNotes()
+                return m, nil</span>
+        case "p":<span class="cov8" title="1">
+                // Open plugin manager
+                m.viewMode = viewPlugins
+                m.loadPlugins()
+                return m, nil</span>
+        case "o":<span class="cov8" title="1">
+                // Browse online repositories
+                m.viewMode = viewOnline
+                m.loadRepositories()
+                return m, nil</span>
+        case "s":<span class="cov8" title="1">
+                // Show sync status
+                m.viewMode = viewSync
+                m.loadSyncStatus()
+                return m, nil</span>
+        case "ctrl+s":<span class="cov8" title="1">
+                // Force sync
+                m.statusMessage = "Syncing..."
+                // Trigger sync in background
+                return m, nil</span>
+        case "up", "k":<span class="cov8" title="1">
+                if m.cursorY &gt; 1 </span><span class="cov8" title="1">{
+                        m.cursorY--
+                }</span>
+                <span class="cov8" title="1">return m, nil</span>
+        case "down", "j":<span class="cov8" title="1">
+                if m.cursorY &lt; len(m.rows)-1 </span><span class="cov8" title="1">{
+                        m.cursorY++
+                }</span>
+                <span class="cov8" title="1">return m, nil</span>
+        case "left", "h":<span class="cov8" title="1">
+                if m.cursorX &gt; 0 </span><span class="cov8" title="1">{
+                        m.cursorX--
+                }</span>
+                <span class="cov8" title="1">return m, nil</span>
+        case "right", "l":<span class="cov8" title="1">
+                if m.cursorX &lt; len(m.rows[0])-1 </span><span class="cov8" title="1">{
+                        m.cursorX++
+                }</span>
+                <span class="cov8" title="1">return m, nil</span>
+        case "ctrl+a", "home":<span class="cov8" title="1">
+                m.cursorY = 1
+                return m, nil</span>
+        case "ctrl+e", "end":<span class="cov8" title="1">
+                m.cursorY = len(m.rows) - 1
+                return m, nil</span>
+        case "ctrl+r":<span class="cov8" title="1">
+                // Refresh data
+                m.rows = m.registry.GetTableData(m.config.Apps)
+                m.allRows = m.rows
+                return m, nil</span>
+        case "esc", "ctrl+[":<span class="cov8" title="1">
+                // Clear search/filter
+                m.searchMode = false
+                m.searchQuery = ""
+                m.lastSearch = ""
+                m.rows = m.allRows
+                m.cursorY = 1
+                return m, nil</span>
         }
         <span class="cov8" title="1">return m, nil</span>
 }
 
-func (m model) View() string <span class="cov8" title="1">{
-        return m.renderer.RenderWithInstructions(m.rows, m.cursorX, m.cursorY)
+func (m model) handleNotesInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) <span class="cov8" title="1">{
+        switch msg.String() </span>{
+        case "esc", "q":<span class="cov8" title="1">
+                m.viewMode = viewMain
+                return m, nil</span>
+        case "up", "k":<span class="cov0" title="0">
+                if m.noteCursor &gt; 0 </span><span class="cov0" title="0">{
+                        m.noteCursor--
+                }</span>
+                <span class="cov0" title="0">return m, nil</span>
+        case "down", "j":<span class="cov8" title="1">
+                if m.noteCursor &lt; len(m.notesList)-1 </span><span class="cov0" title="0">{
+                        m.noteCursor++
+                }</span>
+                <span class="cov8" title="1">return m, nil</span>
+        case "n":<span class="cov8" title="1">
+                // Create new note with simple hardcoded example
+                newNote := &amp;notes.Note{
+                        Title:    fmt.Sprintf("New Note %d", time.Now().Unix()),
+                        Content:  "Enter your note content here",
+                        Category: "general",
+                        Tags:     []string{"new"},
+                }
+                err := m.notesManager.CreateNote(newNote)
+                if err != nil </span><span class="cov0" title="0">{
+                        m.statusMessage = fmt.Sprintf("Error creating note: %v", err)
+                }</span> else<span class="cov8" title="1"> {
+                        m.loadNotes()
+                        m.statusMessage = "Note created successfully"
+                }</span>
+                <span class="cov8" title="1">return m, nil</span>
+        case "e":<span class="cov0" title="0">
+                // Edit selected note - for now just update the timestamp
+                if m.noteCursor &lt; len(m.notesList) </span><span class="cov0" title="0">{
+                        note := m.notesList[m.noteCursor]
+                        note.Content = note.Content + "\n[Edited at " + time.Now().Format("15:04:05") + "]"
+                        err := m.notesManager.UpdateNote(note.ID, note)
+                        if err != nil </span><span class="cov0" title="0">{
+                                m.statusMessage = fmt.Sprintf("Error updating note: %v", err)
+                        }</span> else<span class="cov0" title="0"> {
+                                m.loadNotes()
+                                m.statusMessage = fmt.Sprintf("Note '%s' updated", note.Title)
+                        }</span>
+                }
+                <span class="cov0" title="0">return m, nil</span>
+        case "d":<span class="cov0" title="0">
+                // Delete selected note
+                if m.noteCursor &lt; len(m.notesList) </span><span class="cov0" title="0">{
+                        noteID := m.notesList[m.noteCursor].ID
+                        m.notesManager.DeleteNote(noteID)
+                        m.loadNotes()
+                        m.statusMessage = "Note deleted"
+                }</span>
+                <span class="cov0" title="0">return m, nil</span>
+        case "f":<span class="cov0" title="0">
+                // Toggle favorite
+                if m.noteCursor &lt; len(m.notesList) </span><span class="cov0" title="0">{
+                        noteID := m.notesList[m.noteCursor].ID
+                        m.notesManager.ToggleFavorite(noteID)
+                        m.loadNotes()
+                }</span>
+                <span class="cov0" title="0">return m, nil</span>
+        }
+        <span class="cov0" title="0">return m, nil</span>
+}
+
+func (m model) handlePluginsInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) <span class="cov8" title="1">{
+        switch msg.String() </span>{
+        case "esc", "q":<span class="cov8" title="1">
+                m.viewMode = viewMain
+                return m, nil</span>
+        case "up", "k":<span class="cov0" title="0">
+                if m.pluginCursor &gt; 0 </span><span class="cov0" title="0">{
+                        m.pluginCursor--
+                }</span>
+                <span class="cov0" title="0">return m, nil</span>
+        case "down", "j":<span class="cov8" title="1">
+                if m.pluginCursor &lt; len(m.pluginsList)-1 </span><span class="cov0" title="0">{
+                        m.pluginCursor++
+                }</span>
+                <span class="cov8" title="1">return m, nil</span>
+        case "l":<span class="cov0" title="0">
+                // Load plugin
+                if m.pluginCursor &lt; len(m.pluginsList) </span><span class="cov0" title="0">{
+                        plugin := m.pluginsList[m.pluginCursor]
+                        m.statusMessage = fmt.Sprintf("Loading plugin: %s", plugin.Metadata.Name)
+                }</span>
+                <span class="cov0" title="0">return m, nil</span>
+        case "u":<span class="cov0" title="0">
+                // Unload plugin
+                if m.pluginCursor &lt; len(m.pluginsList) </span><span class="cov0" title="0">{
+                        plugin := m.pluginsList[m.pluginCursor]
+                        m.pluginLoader.UnloadPlugin(plugin.Metadata.Name)
+                        m.loadPlugins()
+                        m.statusMessage = fmt.Sprintf("Unloaded plugin: %s", plugin.Metadata.Name)
+                }</span>
+                <span class="cov0" title="0">return m, nil</span>
+        case "r":<span class="cov8" title="1">
+                // Reload plugins
+                m.pluginLoader.LoadAll()
+                m.loadPlugins()
+                m.statusMessage = "Plugins reloaded"
+                return m, nil</span>
+        }
+        <span class="cov0" title="0">return m, nil</span>
+}
+
+func (m model) handleOnlineInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) <span class="cov8" title="1">{
+        switch msg.String() </span>{
+        case "esc", "q":<span class="cov8" title="1">
+                m.viewMode = viewMain
+                return m, nil</span>
+        case "up", "k":<span class="cov8" title="1">
+                if m.repoCursor &gt; 0 </span><span class="cov0" title="0">{
+                        m.repoCursor--
+                }</span>
+                <span class="cov8" title="1">return m, nil</span>
+        case "down", "j":<span class="cov0" title="0">
+                if m.repoCursor &lt; len(m.reposList)-1 </span><span class="cov0" title="0">{
+                        m.repoCursor++
+                }</span>
+                <span class="cov0" title="0">return m, nil</span>
+        case "enter":<span class="cov0" title="0">
+                // Browse selected repository
+                if m.repoCursor &lt; len(m.reposList) </span><span class="cov0" title="0">{
+                        repo := m.reposList[m.repoCursor]
+                        m.loadCheatSheets(repo.URL)
+                }</span>
+                <span class="cov0" title="0">return m, nil</span>
+        case "d":<span class="cov0" title="0">
+                // Download selected cheat sheet
+                if m.sheetCursor &lt; len(m.cheatSheets) </span><span class="cov0" title="0">{
+                        sheet := m.cheatSheets[m.sheetCursor]
+                        m.statusMessage = fmt.Sprintf("Downloading: %s", sheet.Name)
+                        // Download logic here
+                }</span>
+                <span class="cov0" title="0">return m, nil</span>
+        case "/":<span class="cov8" title="1">
+                // Search online
+                m.searchMode = true
+                return m, nil</span>
+        }
+        <span class="cov0" title="0">return m, nil</span>
+}
+
+func (m model) handleSyncInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) <span class="cov8" title="1">{
+        switch msg.String() </span>{
+        case "esc", "q":<span class="cov8" title="1">
+                m.viewMode = viewMain
+                return m, nil</span>
+        case "s":<span class="cov8" title="1">
+                // Trigger sync
+                m.statusMessage = "Syncing..."
+                if m.syncManager != nil </span><span class="cov0" title="0">{
+                        go m.syncManager.Sync()
+                }</span>
+                <span class="cov8" title="1">return m, nil</span>
+        case "r":<span class="cov8" title="1">
+                // Resolve conflicts
+                m.statusMessage = "Resolving conflicts..."
+                return m, nil</span>
+        case "a":<span class="cov8" title="1">
+                // Toggle auto-sync
+                if m.syncManager != nil </span><span class="cov0" title="0">{
+                        // Toggle auto-sync setting
+                        m.statusMessage = "Auto-sync toggled"
+                }</span>
+                <span class="cov8" title="1">return m, nil</span>
+        }
+        <span class="cov0" title="0">return m, nil</span>
+}
+
+func (m model) handleSearchInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) <span class="cov8" title="1">{
+        switch msg.String() </span>{
+        case "ctrl+c":<span class="cov0" title="0">
+                return m, tea.Quit</span>
+        case "esc", "ctrl+[":<span class="cov8" title="1">
+                m.searchMode = false
+                m.searchQuery = ""
+                m.rows = m.allRows
+                m.lastSearch = ""
+                m.cursorY = 1
+                return m, nil</span>
+        case "ctrl+u":<span class="cov8" title="1">
+                m.searchQuery = ""
+                return m, nil</span>
+        case "enter":<span class="cov8" title="1">
+                m.searchMode = false
+                if m.searchQuery == "" </span><span class="cov0" title="0">{
+                        m.rows = m.allRows
+                        m.lastSearch = ""
+                }</span> else<span class="cov8" title="1"> {
+                        m.rows = m.registry.SearchTableData(m.config.Apps, m.searchQuery)
+                        m.lastSearch = m.searchQuery
+                }</span>
+                <span class="cov8" title="1">m.cursorY = 1
+                return m, nil</span>
+        case "backspace":<span class="cov8" title="1">
+                if len(m.searchQuery) &gt; 0 </span><span class="cov8" title="1">{
+                        m.searchQuery = m.searchQuery[:len(m.searchQuery)-1]
+                }</span>
+                <span class="cov8" title="1">return m, nil</span>
+        default:<span class="cov8" title="1">
+                if len(msg.String()) == 1 </span><span class="cov8" title="1">{
+                        m.searchQuery += msg.String()
+                }</span>
+                <span class="cov8" title="1">return m, nil</span>
+        }
+}
+
+func (m model) handleFilterInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) <span class="cov8" title="1">{
+        switch msg.String() </span>{
+        case "ctrl+c":<span class="cov0" title="0">
+                return m, tea.Quit</span>
+        case "esc", "ctrl+[":<span class="cov0" title="0">
+                // Exit filter mode
+                m.filterMode = false
+                return m, nil</span>
+        case "ctrl+u":<span class="cov0" title="0">
+                // Clear all selections
+                m.filteredApps = make([]string, 0)
+                return m, nil</span>
+        case "enter":<span class="cov0" title="0">
+                // Apply filter and exit filter mode
+                m.filterMode = false
+                if len(m.filteredApps) == 0 </span><span class="cov0" title="0">{
+                        // If no apps selected, show all
+                        m.rows = m.registry.GetTableData(m.allApps)
+                }</span> else<span class="cov0" title="0"> {
+                        // Show only selected apps
+                        m.rows = m.registry.GetTableData(m.filteredApps)
+                }</span>
+                <span class="cov0" title="0">m.cursorY = 1
+                return m, nil</span>
+        case "1", "2", "3", "4", "5", "6", "7", "8", "9":<span class="cov8" title="1">
+                // Toggle app selection by number
+                appIndex := int(msg.String()[0] - '1') // Convert '1' to 0, '2' to 1, etc.
+                if appIndex &lt; len(m.allApps) </span><span class="cov8" title="1">{
+                        appName := m.allApps[appIndex]
+                        // Toggle app in filteredApps
+                        found := false
+                        for i, name := range m.filteredApps </span><span class="cov8" title="1">{
+                                if name == appName </span><span class="cov8" title="1">{
+                                        // Remove app
+                                        m.filteredApps = append(m.filteredApps[:i], m.filteredApps[i+1:]...)
+                                        found = true
+                                        break</span>
+                                }
+                        }
+                        <span class="cov8" title="1">if !found </span><span class="cov8" title="1">{
+                                // Add app
+                                m.filteredApps = append(m.filteredApps, appName)
+                        }</span>
+                }
+                <span class="cov8" title="1">return m, nil</span>
+        case "c":<span class="cov8" title="1">
+                // Clear all filters
+                m.filteredApps = make([]string, 0)
+                return m, nil</span>
+        case "a":<span class="cov8" title="1">
+                // Select all apps
+                m.filteredApps = make([]string, len(m.allApps))
+                copy(m.filteredApps, m.allApps)
+                return m, nil</span>
+        }
+        <span class="cov0" title="0">return m, nil</span>
+}
+
+func (m model) handleHelpInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) <span class="cov0" title="0">{
+        switch msg.String() </span>{
+        case "?", "esc", "q":<span class="cov0" title="0">
+                m.helpMode = false
+                m.viewMode = viewMain
+                return m, nil</span>
+        }
+        <span class="cov0" title="0">return m, nil</span>
+}
+
+// Helper methods for loading data
+func (m *model) loadNotes() <span class="cov8" title="1">{
+        notes, _ := m.notesManager.ListNotes()
+        m.notesList = notes
+        m.noteCursor = 0
 }</span>
 
+func (m *model) loadPlugins() <span class="cov8" title="1">{
+        m.pluginsList = m.pluginLoader.ListPlugins()
+        m.pluginCursor = 0
+}</span>
+
+func (m *model) loadRepositories() <span class="cov8" title="1">{
+        repos, _ := m.onlineClient.GetRepositories()
+        m.reposList = repos
+        m.repoCursor = 0
+}</span>
+
+func (m *model) loadCheatSheets(repoURL string) <span class="cov0" title="0">{
+        sheets, _ := m.onlineClient.SearchCheatSheets(online.SearchOptions{
+                Repository: repoURL,
+                Limit:      50,
+        })
+        m.cheatSheets = sheets
+        m.sheetCursor = 0
+}</span>
+
+func (m *model) loadSyncStatus() <span class="cov8" title="1">{
+        if m.syncManager != nil </span><span class="cov0" title="0">{
+                m.syncStatus = m.syncManager.GetSyncStatus()
+        }</span> else<span class="cov8" title="1"> {
+                m.syncStatus = sync.SyncStatus{
+                        LastSync:  time.Time{},
+                        IsSyncing: false,
+                        DeviceID:  "not-configured",
+                }
+        }</span>
+}
+
+func (m model) View() string <span class="cov8" title="1">{
+        switch m.viewMode </span>{
+        case viewNotes:<span class="cov8" title="1">
+                return m.viewNotes()</span>
+        case viewPlugins:<span class="cov8" title="1">
+                return m.viewPlugins()</span>
+        case viewOnline:<span class="cov8" title="1">
+                return m.viewOnline()</span>
+        case viewSync:<span class="cov8" title="1">
+                return m.viewSync()</span>
+        case viewHelp:<span class="cov8" title="1">
+                return m.viewHelp()</span>
+        default:<span class="cov8" title="1">
+                return m.viewMain()</span>
+        }
+}
+
+func (m model) viewMain() string <span class="cov8" title="1">{
+        // Original main view implementation
+        var output strings.Builder
+
+        // Render the table with cursor position
+        tableStr := m.renderer.RenderWithHighlighting(
+                m.rows,
+                m.cursorX,
+                m.cursorY,
+                m.lastSearch,
+        )
+        output.WriteString(tableStr)
+        output.WriteString("\n")
+
+        // Show status bar
+        if m.searchMode </span><span class="cov8" title="1">{
+                output.WriteString(fmt.Sprintf("\nSearch: %s_\nType to search, Enter to confirm, Esc to cancel\n", m.searchQuery))
+        }</span> else<span class="cov8" title="1"> if m.filterMode </span><span class="cov8" title="1">{
+                output.WriteString("\nFilter Apps: ")
+                for i, app := range m.allApps </span><span class="cov8" title="1">{
+                        isSelected := false
+                        for _, selected := range m.filteredApps </span><span class="cov8" title="1">{
+                                if app == selected </span><span class="cov8" title="1">{
+                                        isSelected = true
+                                        break</span>
+                                }
+                        }
+                        <span class="cov8" title="1">if isSelected </span><span class="cov8" title="1">{
+                                output.WriteString(fmt.Sprintf(" [%d] ✓%s", i+1, app))
+                        }</span> else<span class="cov8" title="1"> {
+                                output.WriteString(fmt.Sprintf(" [%d] %s", i+1, app))
+                        }</span>
+                }
+                <span class="cov8" title="1">output.WriteString("\n1-9: toggle apps, a: all, c: clear, Enter: apply, Esc: cancel\n")</span>
+        } else<span class="cov8" title="1"> {
+                output.WriteString("\nArrow keys/hjkl: move • /: search • f: filter • n: notes • p: plugins • o: online • s: sync • ?: help • q: quit\n")
+        }</span>
+
+        <span class="cov8" title="1">if m.statusMessage != "" </span><span class="cov0" title="0">{
+                output.WriteString(fmt.Sprintf("\nStatus: %s\n", m.statusMessage))
+        }</span>
+
+        <span class="cov8" title="1">return output.String()</span>
+}
+
+func (m model) viewNotes() string <span class="cov8" title="1">{
+        var output strings.Builder
+
+        output.WriteString("╭─ Personal Notes ─────────────────────────────────────────╮\n")
+
+        if len(m.notesList) == 0 </span><span class="cov0" title="0">{
+                output.WriteString("│  No notes found. Press 'n' to create a new note.        │\n")
+        }</span> else<span class="cov8" title="1"> {
+                for i, note := range m.notesList </span><span class="cov8" title="1">{
+                        if i &gt; 10 </span><span class="cov0" title="0">{
+                                output.WriteString(fmt.Sprintf("│  ... and %d more notes                                   │\n", len(m.notesList)-10))
+                                break</span>
+                        }
+
+                        <span class="cov8" title="1">cursor := "  "
+                        if i == m.noteCursor </span><span class="cov8" title="1">{
+                                cursor = "▶ "
+                        }</span>
+
+                        <span class="cov8" title="1">favorite := " "
+                        if note.IsFavorite </span><span class="cov0" title="0">{
+                                favorite = "⭐"
+                        }</span>
+
+                        <span class="cov8" title="1">line := fmt.Sprintf("%s%s %-30s %s", cursor, favorite, note.Title, note.AppName)
+                        if len(line) &gt; 58 </span><span class="cov0" title="0">{
+                                line = line[:58]
+                        }</span>
+                        <span class="cov8" title="1">output.WriteString(fmt.Sprintf("│%-58s│\n", line))</span>
+                }
+        }
+
+        <span class="cov8" title="1">output.WriteString("╰──────────────────────────────────────────────────────────╯\n")
+        output.WriteString("\nKeys: n: new • e: edit • d: delete • f: favorite • esc: back\n")
+
+        if m.statusMessage != "" </span><span class="cov0" title="0">{
+                output.WriteString(fmt.Sprintf("\nStatus: %s\n", m.statusMessage))
+        }</span>
+
+        <span class="cov8" title="1">return output.String()</span>
+}
+
+func (m model) viewPlugins() string <span class="cov8" title="1">{
+        var output strings.Builder
+
+        output.WriteString("╭─ Plugin Manager ─────────────────────────────────────────╮\n")
+
+        if len(m.pluginsList) == 0 </span><span class="cov8" title="1">{
+                output.WriteString("│  No plugins loaded. Place plugins in plugins directory. │\n")
+        }</span> else<span class="cov0" title="0"> {
+                for i, plugin := range m.pluginsList </span><span class="cov0" title="0">{
+                        if i &gt; 10 </span><span class="cov0" title="0">{
+                                output.WriteString(fmt.Sprintf("│  ... and %d more plugins                                 │\n", len(m.pluginsList)-10))
+                                break</span>
+                        }
+
+                        <span class="cov0" title="0">cursor := "  "
+                        if i == m.pluginCursor </span><span class="cov0" title="0">{
+                                cursor = "▶ "
+                        }</span>
+
+                        <span class="cov0" title="0">line := fmt.Sprintf("%s%-20s v%-8s %s", cursor, plugin.Metadata.Name, plugin.Metadata.Version, plugin.Metadata.Author)
+                        if len(line) &gt; 58 </span><span class="cov0" title="0">{
+                                line = line[:58]
+                        }</span>
+                        <span class="cov0" title="0">output.WriteString(fmt.Sprintf("│%-58s│\n", line))</span>
+                }
+        }
+
+        <span class="cov8" title="1">output.WriteString("╰──────────────────────────────────────────────────────────╯\n")
+        output.WriteString("\nKeys: l: load • u: unload • r: reload all • esc: back\n")
+
+        if m.statusMessage != "" </span><span class="cov0" title="0">{
+                output.WriteString(fmt.Sprintf("\nStatus: %s\n", m.statusMessage))
+        }</span>
+
+        <span class="cov8" title="1">return output.String()</span>
+}
+
+func (m model) viewOnline() string <span class="cov8" title="1">{
+        var output strings.Builder
+
+        output.WriteString("╭─ Online Repositories ────────────────────────────────────╮\n")
+
+        if len(m.reposList) == 0 </span><span class="cov0" title="0">{
+                output.WriteString("│  Loading repositories...                                 │\n")
+        }</span> else<span class="cov8" title="1"> {
+                for i, repo := range m.reposList </span><span class="cov8" title="1">{
+                        cursor := "  "
+                        if i == m.repoCursor </span><span class="cov8" title="1">{
+                                cursor = "▶ "
+                        }</span>
+
+                        <span class="cov8" title="1">line := fmt.Sprintf("%s%-30s ⭐%d", cursor, repo.Name, repo.Stars)
+                        if len(line) &gt; 58 </span><span class="cov0" title="0">{
+                                line = line[:58]
+                        }</span>
+                        <span class="cov8" title="1">output.WriteString(fmt.Sprintf("│%-58s│\n", line))</span>
+                }
+        }
+
+        <span class="cov8" title="1">if len(m.cheatSheets) &gt; 0 </span><span class="cov0" title="0">{
+                output.WriteString("│──────────────────────────────────────────────────────────│\n")
+                output.WriteString("│ Cheat Sheets:                                            │\n")
+                for i, sheet := range m.cheatSheets </span><span class="cov0" title="0">{
+                        if i &gt; 5 </span><span class="cov0" title="0">{
+                                break</span>
+                        }
+                        <span class="cov0" title="0">line := fmt.Sprintf("  %-25s ⬇%d ★%.1f", sheet.Name, sheet.Downloads, sheet.Rating)
+                        if len(line) &gt; 58 </span><span class="cov0" title="0">{
+                                line = line[:58]
+                        }</span>
+                        <span class="cov0" title="0">output.WriteString(fmt.Sprintf("│%-58s│\n", line))</span>
+                }
+        }
+
+        <span class="cov8" title="1">output.WriteString("╰──────────────────────────────────────────────────────────╯\n")
+        output.WriteString("\nKeys: enter: browse • d: download • /: search • esc: back\n")
+
+        if m.statusMessage != "" </span><span class="cov0" title="0">{
+                output.WriteString(fmt.Sprintf("\nStatus: %s\n", m.statusMessage))
+        }</span>
+
+        <span class="cov8" title="1">return output.String()</span>
+}
+
+func (m model) viewSync() string <span class="cov8" title="1">{
+        var output strings.Builder
+
+        output.WriteString("╭─ Sync Status ────────────────────────────────────────────╮\n")
+
+        if m.syncManager == nil </span><span class="cov8" title="1">{
+                output.WriteString("│  Sync is not configured.                                 │\n")
+                output.WriteString("│  Configure sync in ~/.config/cheat-go/config.yaml        │\n")
+        }</span> else<span class="cov0" title="0"> {
+                status := "Idle"
+                if m.syncStatus.IsSyncing </span><span class="cov0" title="0">{
+                        status = "Syncing..."
+                }</span>
+
+                <span class="cov0" title="0">lastSync := "Never"
+                if !m.syncStatus.LastSync.IsZero() </span><span class="cov0" title="0">{
+                        lastSync = m.syncStatus.LastSync.Format("2006-01-02 15:04:05")
+                }</span>
+
+                <span class="cov0" title="0">output.WriteString(fmt.Sprintf("│  Status:     %-43s │\n", status))
+                output.WriteString(fmt.Sprintf("│  Last Sync:  %-43s │\n", lastSync))
+                output.WriteString(fmt.Sprintf("│  Device ID:  %-43s │\n", m.syncStatus.DeviceID[:16]+"..."))
+
+                if m.syncStatus.HasConflicts </span><span class="cov0" title="0">{
+                        output.WriteString(fmt.Sprintf("│  ⚠ Conflicts: %-42d │\n", len(m.syncStatus.Conflicts)))
+                }</span>
+        }
+
+        <span class="cov8" title="1">output.WriteString("╰──────────────────────────────────────────────────────────╯\n")
+        output.WriteString("\nKeys: s: sync now • r: resolve conflicts • a: auto-sync • esc: back\n")
+
+        if m.statusMessage != "" </span><span class="cov0" title="0">{
+                output.WriteString(fmt.Sprintf("\nStatus: %s\n", m.statusMessage))
+        }</span>
+
+        <span class="cov8" title="1">return output.String()</span>
+}
+
+func (m model) viewHelp() string <span class="cov8" title="1">{
+        return `
+╭─ Help ───────────────────────────────────────────────────╮
+│                                                          │
+│  NAVIGATION                                              │
+│    ↑/k, ↓/j, ←/h, →/l  Navigate                        │
+│    Home/Ctrl+A          Go to first row                 │
+│    End/Ctrl+E           Go to last row                  │
+│                                                          │
+│  FEATURES                                                │
+│    /                    Search mode                     │
+│    f                    Filter apps                     │
+│    n                    Notes manager                   │
+│    p                    Plugin manager                  │
+│    o                    Browse online                   │
+│    s                    Sync status                     │
+│    Ctrl+S               Force sync                      │
+│    Ctrl+R               Refresh data                    │
+│    ?                    This help screen                │
+│    q/Ctrl+C             Quit                           │
+│                                                          │
+│  SEARCH MODE                                            │
+│    Type to search                                       │
+│    Enter                Confirm search                  │
+│    Esc                  Cancel search                   │
+│    Ctrl+U               Clear search                    │
+│                                                          │
+╰──────────────────────────────────────────────────────────╯
+
+Press ? or Esc to close help
+`
+}</span>
+
+func (m model) filterRowsBySearch(query string) [][]string <span class="cov8" title="1">{
+        if query == "" </span><span class="cov8" title="1">{
+                return m.allRows
+        }</span>
+
+        <span class="cov8" title="1">var filtered [][]string
+        // Always include header row
+        if len(m.allRows) &gt; 0 </span><span class="cov8" title="1">{
+                filtered = append(filtered, m.allRows[0])
+        }</span>
+
+        // Filter data rows (skip header at index 0)
+        <span class="cov8" title="1">for i := 1; i &lt; len(m.allRows); i++ </span><span class="cov8" title="1">{
+                row := m.allRows[i]
+                // Search in all columns of the row
+                for _, cell := range row </span><span class="cov8" title="1">{
+                        if strings.Contains(strings.ToLower(cell), strings.ToLower(query)) </span><span class="cov8" title="1">{
+                                filtered = append(filtered, row)
+                                break</span> // Found match, add row and move to next
+                        }
+                }
+        }
+
+        <span class="cov8" title="1">return filtered</span>
+}
+
+func (m model) isAppSelected(appName string) bool <span class="cov8" title="1">{
+        for _, name := range m.filteredApps </span><span class="cov8" title="1">{
+                if name == appName </span><span class="cov8" title="1">{
+                        return true
+                }</span>
+        }
+        <span class="cov8" title="1">return false</span>
+}
+
 func main() <span class="cov0" title="0">{
-        p := tea.NewProgram(initialModel())
-        if err := p.Start(); err != nil </span><span class="cov0" title="0">{
-                fmt.Println("Error running program:", err)
+        opts := parseFlags()
+
+        if opts.showHelp </span><span class="cov0" title="0">{
+                printHelp()
+                os.Exit(0)
+        }</span>
+
+        <span class="cov0" title="0">if opts.showVersion </span><span class="cov0" title="0">{
+                printVersion()
+                os.Exit(0)
+        }</span>
+
+        <span class="cov0" title="0">p := tea.NewProgram(initialModel(opts))
+        if _, err := p.Run(); err != nil </span><span class="cov0" title="0">{
+                fmt.Printf("Error running program: %v\n", err)
                 os.Exit(1)
         }</span>
 }
@@ -185,8 +1139,10 @@ func main() <span class="cov0" title="0">{
 
 import (
         "errors"
+        "fmt"
         "os"
         "path/filepath"
+        "strings"
 
         "gopkg.in/yaml.v3"
 )
@@ -194,6 +1150,8 @@ import (
 var (
         ErrAppNotFound    = errors.New("application not found")
         ErrInvalidAppFile = errors.New("invalid app file format")
+        ErrAppValidation  = errors.New("app validation failed")
+        ErrDirectoryRead  = errors.New("failed to read app directory")
 )
 
 // Registry manages application loading and registration
@@ -219,11 +1177,44 @@ func NewRegistry(dataDir string) *Registry <span class="cov8" title="1">{
 func (r *Registry) LoadApps(appNames []string) error <span class="cov8" title="1">{
         for _, name := range appNames </span><span class="cov8" title="1">{
                 if err := r.LoadApp(name); err != nil </span><span class="cov8" title="1">{
-                        // If loading from file fails, use hardcoded data
+                        // Log error but continue with next app (backward compatibility)
                         continue</span>
                 }
         }
         <span class="cov8" title="1">return nil</span>
+}
+
+// LoadAllAppsFromDirectory scans the data directory and loads all available apps
+func (r *Registry) LoadAllAppsFromDirectory() error <span class="cov0" title="0">{
+        if r.dataDir == "" </span><span class="cov0" title="0">{
+                return nil
+        }</span>
+
+        <span class="cov0" title="0">expandedDir := expandPath(r.dataDir)
+        entries, err := os.ReadDir(expandedDir)
+        if err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("%w: %s", ErrDirectoryRead, expandedDir)
+        }</span>
+
+        <span class="cov0" title="0">for _, entry := range entries </span><span class="cov0" title="0">{
+                if entry.IsDir() </span><span class="cov0" title="0">{
+                        continue</span>
+                }
+
+                <span class="cov0" title="0">name := entry.Name()
+                if !strings.HasSuffix(name, ".yaml") &amp;&amp; !strings.HasSuffix(name, ".yml") </span><span class="cov0" title="0">{
+                        continue</span>
+                }
+
+                // Extract app name from filename
+                <span class="cov0" title="0">appName := strings.TrimSuffix(strings.TrimSuffix(name, ".yaml"), ".yml")
+                if err := r.LoadApp(appName); err != nil </span><span class="cov0" title="0">{
+                        // Log but don't fail for individual app loading errors
+                        continue</span>
+                }
+        }
+
+        <span class="cov0" title="0">return nil</span>
 }
 
 // LoadApp loads a single application from file or hardcoded data
@@ -238,7 +1229,7 @@ func (r *Registry) LoadApp(name string) error <span class="cov8" title="1">{
         }
 
         // If file loading fails, app should already be loaded from hardcoded data
-        <span class="cov8" title="1">if _, exists := r.Get(name); exists </span><span class="cov0" title="0">{
+        <span class="cov8" title="1">if _, exists := r.Get(name); exists </span><span class="cov8" title="1">{
                 return nil
         }</span>
 
@@ -254,10 +1245,79 @@ func (r *Registry) loadAppFromFile(path string) (*App, error) <span class="cov8"
 
         <span class="cov8" title="1">var app App
         if err := yaml.Unmarshal(data, &amp;app); err != nil </span><span class="cov8" title="1">{
-                return nil, ErrInvalidAppFile
+                return nil, fmt.Errorf("%w: %v", ErrInvalidAppFile, err)
+        }</span>
+
+        // Validate the loaded app
+        <span class="cov8" title="1">if err := r.validateApp(&amp;app); err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("%w: %v", ErrAppValidation, err)
         }</span>
 
         <span class="cov8" title="1">return &amp;app, nil</span>
+}
+
+// validateApp validates an app definition
+func (r *Registry) validateApp(app *App) error <span class="cov8" title="1">{
+        var errors []error
+
+        // Required fields
+        if app.Name == "" </span><span class="cov0" title="0">{
+                errors = append(errors, fmt.Errorf("app name is required"))
+        }</span>
+
+        <span class="cov8" title="1">if app.Description == "" </span><span class="cov0" title="0">{
+                errors = append(errors, fmt.Errorf("app description is required"))
+        }</span>
+
+        // Validate shortcuts
+        <span class="cov8" title="1">for i, shortcut := range app.Shortcuts </span><span class="cov8" title="1">{
+                if shortcut.Keys == "" </span><span class="cov0" title="0">{
+                        errors = append(errors, fmt.Errorf("shortcut %d: keys field is required", i))
+                }</span>
+                <span class="cov8" title="1">if shortcut.Description == "" </span><span class="cov0" title="0">{
+                        errors = append(errors, fmt.Errorf("shortcut %d: description field is required", i))
+                }</span>
+        }
+
+        <span class="cov8" title="1">if len(errors) &gt; 0 </span><span class="cov0" title="0">{
+                return fmt.Errorf("validation errors: %v", errors)
+        }</span>
+
+        <span class="cov8" title="1">return nil</span>
+}
+
+// SaveApp saves an app definition to a YAML file
+func (r *Registry) SaveApp(app *App) error <span class="cov0" title="0">{
+        if r.dataDir == "" </span><span class="cov0" title="0">{
+                return fmt.Errorf("data directory not configured")
+        }</span>
+
+        // Validate before saving
+        <span class="cov0" title="0">if err := r.validateApp(app); err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+
+        <span class="cov0" title="0">expandedDir := expandPath(r.dataDir)
+
+        // Ensure directory exists
+        if err := os.MkdirAll(expandedDir, 0755); err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to create data directory: %w", err)
+        }</span>
+
+        <span class="cov0" title="0">appPath := filepath.Join(expandedDir, app.Name+".yaml")
+        data, err := yaml.Marshal(app)
+        if err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to marshal app data: %w", err)
+        }</span>
+
+        <span class="cov0" title="0">if err := os.WriteFile(appPath, data, 0644); err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to write app file: %w", err)
+        }</span>
+
+        // Register the app in memory
+        <span class="cov0" title="0">r.Register(app)
+
+        return nil</span>
 }
 
 // loadHardcodedApps loads the original hardcoded application data
@@ -386,6 +1446,108 @@ func (r *Registry) GetTableData(appNames []string) [][]string <span class="cov8"
         <span class="cov8" title="1">return rows</span>
 }
 
+// SearchTableData returns filtered table data based on search query
+func (r *Registry) SearchTableData(appNames []string, query string) [][]string <span class="cov8" title="1">{
+        // If no query, return all data
+        if query == "" </span><span class="cov8" title="1">{
+                return r.GetTableData(appNames)
+        }</span>
+
+        // Header row
+        <span class="cov8" title="1">header := make([]string, len(appNames)+1)
+        header[0] = "Shortcut"
+        copy(header[1:], appNames)
+
+        // Collect shortcuts that match the search query
+        shortcutMap := make(map[string][]string)
+        for i, appName := range appNames </span><span class="cov8" title="1">{
+                if app, exists := r.Get(appName); exists </span><span class="cov8" title="1">{
+                        for _, shortcut := range app.Shortcuts </span><span class="cov8" title="1">{
+                                // Search in keys, description, and category
+                                if r.shortcutMatches(shortcut, query) </span><span class="cov8" title="1">{
+                                        if _, exists := shortcutMap[shortcut.Keys]; !exists </span><span class="cov8" title="1">{
+                                                shortcutMap[shortcut.Keys] = make([]string, len(appNames))
+                                                for j := range shortcutMap[shortcut.Keys] </span><span class="cov8" title="1">{
+                                                        shortcutMap[shortcut.Keys][j] = "-"
+                                                }</span>
+                                        }
+                                        <span class="cov8" title="1">shortcutMap[shortcut.Keys][i] = shortcut.Description</span>
+                                }
+                        }
+                }
+        }
+
+        // Convert to table format
+        <span class="cov8" title="1">rows := [][]string{header}
+        for keys, descriptions := range shortcutMap </span><span class="cov8" title="1">{
+                row := make([]string, len(appNames)+1)
+                row[0] = keys
+                copy(row[1:], descriptions)
+                rows = append(rows, row)
+        }</span>
+
+        <span class="cov8" title="1">return rows</span>
+}
+
+// shortcutMatches checks if a shortcut matches the search query
+func (r *Registry) shortcutMatches(shortcut Shortcut, query string) bool <span class="cov8" title="1">{
+        queryLower := strings.ToLower(query)
+
+        // Search in keys
+        if strings.Contains(strings.ToLower(shortcut.Keys), queryLower) </span><span class="cov8" title="1">{
+                return true
+        }</span>
+
+        // Search in description
+        <span class="cov8" title="1">if strings.Contains(strings.ToLower(shortcut.Description), queryLower) </span><span class="cov8" title="1">{
+                return true
+        }</span>
+
+        // Search in category
+        <span class="cov8" title="1">if strings.Contains(strings.ToLower(shortcut.Category), queryLower) </span><span class="cov8" title="1">{
+                return true
+        }</span>
+
+        <span class="cov8" title="1">return false</span>
+}
+
+// SearchShortcuts returns all shortcuts matching the query across all apps
+func (r *Registry) SearchShortcuts(query string) []ShortcutResult <span class="cov8" title="1">{
+        var results []ShortcutResult
+        queryLower := strings.ToLower(query)
+
+        for appName, app := range r.AppRegistry.apps </span><span class="cov8" title="1">{
+                for _, shortcut := range app.Shortcuts </span><span class="cov8" title="1">{
+                        if r.shortcutMatches(shortcut, query) </span><span class="cov8" title="1">{
+                                results = append(results, ShortcutResult{
+                                        AppName:  appName,
+                                        Shortcut: shortcut,
+                                        Matches:  r.getSearchMatches(shortcut, queryLower),
+                                })
+                        }</span>
+                }
+        }
+
+        <span class="cov8" title="1">return results</span>
+}
+
+// getSearchMatches returns which fields matched the search query
+func (r *Registry) getSearchMatches(shortcut Shortcut, queryLower string) []string <span class="cov8" title="1">{
+        var matches []string
+
+        if strings.Contains(strings.ToLower(shortcut.Keys), queryLower) </span><span class="cov0" title="0">{
+                matches = append(matches, "keys")
+        }</span>
+        <span class="cov8" title="1">if strings.Contains(strings.ToLower(shortcut.Description), queryLower) </span><span class="cov8" title="1">{
+                matches = append(matches, "description")
+        }</span>
+        <span class="cov8" title="1">if strings.Contains(strings.ToLower(shortcut.Category), queryLower) </span><span class="cov0" title="0">{
+                matches = append(matches, "category")
+        }</span>
+
+        <span class="cov8" title="1">return matches</span>
+}
+
 // expandPath expands ~ to home directory
 func expandPath(path string) string <span class="cov8" title="1">{
         if len(path) == 0 || path[0] != '~' </span><span class="cov8" title="1">{
@@ -458,12 +1620,495 @@ func (r *AppRegistry) List() []string <span class="cov8" title="1">{
         }</span>
         <span class="cov8" title="1">return names</span>
 }
+
+// ShortcutResult represents a search result containing a shortcut and its context
+type ShortcutResult struct {
+        AppName  string   // Name of the application this shortcut belongs to
+        Shortcut Shortcut // The matched shortcut
+        Matches  []string // Which fields matched the search (keys, description, category)
+}
 </pre>
 		
-		<pre class="file" id="file3" style="display: none">package config
+		<pre class="file" id="file3" style="display: none">package cache
+
+import (
+        "container/list"
+        "encoding/json"
+        "errors"
+        "fmt"
+        "os"
+        "path/filepath"
+        "sync"
+        "time"
+)
+
+var (
+        ErrCacheMiss = errors.New("cache miss")
+        ErrExpired   = errors.New("cache entry expired")
+)
+
+type Entry struct {
+        Key        string      `json:"key"`
+        Value      interface{} `json:"value"`
+        ExpireAt   time.Time   `json:"expire_at"`
+        AccessedAt time.Time   `json:"accessed_at"`
+        Size       int64       `json:"size"`
+}
+
+type Cache interface {
+        Get(key string) (interface{}, error)
+        Set(key string, value interface{}, ttl time.Duration) error
+        Delete(key string) error
+        Clear() error
+        Stats() CacheStats
+}
+
+type CacheStats struct {
+        Hits      int64     `json:"hits"`
+        Misses    int64     `json:"misses"`
+        Evictions int64     `json:"evictions"`
+        Size      int64     `json:"size"`
+        Items     int       `json:"items"`
+        LastClean time.Time `json:"last_clean"`
+}
+
+// LRUCache implements a Least Recently Used cache with TTL support
+type LRUCache struct {
+        maxSize         int64
+        maxItems        int
+        size            int64
+        items           map[string]*list.Element
+        evictList       *list.List
+        mu              sync.RWMutex
+        stats           CacheStats
+        cleanupInterval time.Duration
+        stopCleanup     chan struct{}
+}
+
+func NewLRUCache(maxSize int64, maxItems int) *LRUCache <span class="cov8" title="1">{
+        cache := &amp;LRUCache{
+                maxSize:         maxSize,
+                maxItems:        maxItems,
+                items:           make(map[string]*list.Element),
+                evictList:       list.New(),
+                cleanupInterval: 5 * time.Minute,
+                stopCleanup:     make(chan struct{}),
+        }
+
+        go cache.cleanupLoop()
+
+        return cache
+}</span>
+
+func (c *LRUCache) Get(key string) (interface{}, error) <span class="cov8" title="1">{
+        c.mu.Lock()
+        defer c.mu.Unlock()
+
+        element, exists := c.items[key]
+        if !exists </span><span class="cov8" title="1">{
+                c.stats.Misses++
+                return nil, ErrCacheMiss
+        }</span>
+
+        // Get the value as interface{} first
+        <span class="cov8" title="1">val := interface{}(element.Value)
+        entry := val.(*Entry)
+
+        if time.Now().After(entry.ExpireAt) </span><span class="cov8" title="1">{
+                c.removeElement(element)
+                c.stats.Misses++
+                return nil, ErrExpired
+        }</span>
+
+        <span class="cov8" title="1">entry.AccessedAt = time.Now()
+        c.evictList.MoveToFront(element)
+        c.stats.Hits++
+
+        return entry.Value, nil</span>
+}
+
+func (c *LRUCache) Set(key string, value interface{}, ttl time.Duration) error <span class="cov8" title="1">{
+        c.mu.Lock()
+        defer c.mu.Unlock()
+
+        size := c.estimateSize(value)
+
+        if size &gt; c.maxSize </span><span class="cov8" title="1">{
+                return fmt.Errorf("value too large for cache")
+        }</span>
+
+        // Check if key already exists
+        <span class="cov8" title="1">if element, exists := c.items[key]; exists </span><span class="cov8" title="1">{
+                val := interface{}(element.Value)
+                entry := val.(*Entry)
+                c.size -= entry.Size
+                entry.Value = value
+                entry.Size = size
+                entry.ExpireAt = time.Now().Add(ttl)
+                entry.AccessedAt = time.Now()
+                c.size += size
+                c.evictList.MoveToFront(element)
+                return nil
+        }</span>
+
+        // Evict items if necessary
+        <span class="cov8" title="1">for c.size+size &gt; c.maxSize || len(c.items) &gt;= c.maxItems </span><span class="cov8" title="1">{
+                c.evictOldest()
+        }</span>
+
+        <span class="cov8" title="1">entry := &amp;Entry{
+                Key:        key,
+                Value:      value,
+                ExpireAt:   time.Now().Add(ttl),
+                AccessedAt: time.Now(),
+                Size:       size,
+        }
+
+        elem := c.evictList.PushFront(entry)
+        c.items[key] = elem
+        c.size += size
+
+        return nil</span>
+}
+
+func (c *LRUCache) Delete(key string) error <span class="cov8" title="1">{
+        c.mu.Lock()
+        defer c.mu.Unlock()
+
+        elem, exists := c.items[key]
+        if !exists </span><span class="cov8" title="1">{
+                return ErrCacheMiss
+        }</span>
+
+        <span class="cov8" title="1">c.removeElement(elem)
+        return nil</span>
+}
+
+func (c *LRUCache) Clear() error <span class="cov8" title="1">{
+        c.mu.Lock()
+        defer c.mu.Unlock()
+
+        c.items = make(map[string]*list.Element)
+        c.evictList.Init()
+        c.size = 0
+
+        return nil
+}</span>
+
+func (c *LRUCache) Stats() CacheStats <span class="cov8" title="1">{
+        c.mu.RLock()
+        defer c.mu.RUnlock()
+
+        c.stats.Size = c.size
+        c.stats.Items = len(c.items)
+
+        return c.stats
+}</span>
+
+func (c *LRUCache) Stop() <span class="cov8" title="1">{
+        close(c.stopCleanup)
+}</span>
+
+func (c *LRUCache) cleanupLoop() <span class="cov8" title="1">{
+        ticker := time.NewTicker(c.cleanupInterval)
+        defer ticker.Stop()
+
+        for </span><span class="cov8" title="1">{
+                select </span>{
+                case &lt;-ticker.C:<span class="cov0" title="0">
+                        c.cleanup()</span>
+                case &lt;-c.stopCleanup:<span class="cov8" title="1">
+                        return</span>
+                }
+        }
+}
+
+func (c *LRUCache) cleanup() <span class="cov8" title="1">{
+        c.mu.Lock()
+        defer c.mu.Unlock()
+
+        now := time.Now()
+
+        for elem := c.evictList.Back(); elem != nil; </span><span class="cov8" title="1">{
+                entry := interface{}(elem.Value).(*Entry)
+                if now.After(entry.ExpireAt) </span><span class="cov8" title="1">{
+                        prev := elem.Prev()
+                        c.removeElement(elem)
+                        elem = prev
+                }</span> else<span class="cov8" title="1"> {
+                        break</span>
+                }
+        }
+
+        <span class="cov8" title="1">c.stats.LastClean = now</span>
+}
+
+func (c *LRUCache) evictOldest() <span class="cov8" title="1">{
+        elem := c.evictList.Back()
+        if elem != nil </span><span class="cov8" title="1">{
+                c.removeElement(elem)
+                c.stats.Evictions++
+        }</span>
+}
+
+func (c *LRUCache) removeElement(elem *list.Element) <span class="cov8" title="1">{
+        entry := interface{}(elem.Value).(*Entry)
+        delete(c.items, entry.Key)
+        c.evictList.Remove(elem)
+        c.size -= entry.Size
+}</span>
+
+func (c *LRUCache) estimateSize(value interface{}) int64 <span class="cov8" title="1">{
+        // Simple size estimation based on JSON encoding
+        data, err := json.Marshal(value)
+        if err != nil </span><span class="cov0" title="0">{
+                return 1024 // Default size if marshaling fails
+        }</span>
+        <span class="cov8" title="1">return int64(len(data))</span>
+}
+
+// FileCache implements a file-based cache for persistent storage
+type FileCache struct {
+        cacheDir string
+        ttl      time.Duration
+        mu       sync.RWMutex
+        stats    CacheStats
+}
+
+func NewFileCache(cacheDir string, ttl time.Duration) (*FileCache, error) <span class="cov0" title="0">{
+        if err := os.MkdirAll(cacheDir, 0755); err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("failed to create cache directory: %w", err)
+        }</span>
+
+        <span class="cov0" title="0">cache := &amp;FileCache{
+                cacheDir: cacheDir,
+                ttl:      ttl,
+        }
+
+        go cache.cleanupLoop()
+
+        return cache, nil</span>
+}
+
+func (f *FileCache) Get(key string) (interface{}, error) <span class="cov0" title="0">{
+        f.mu.RLock()
+        defer f.mu.RUnlock()
+
+        filePath := f.getFilePath(key)
+
+        info, err := os.Stat(filePath)
+        if err != nil </span><span class="cov0" title="0">{
+                if os.IsNotExist(err) </span><span class="cov0" title="0">{
+                        f.stats.Misses++
+                        return nil, ErrCacheMiss
+                }</span>
+                <span class="cov0" title="0">return nil, err</span>
+        }
+
+        <span class="cov0" title="0">if time.Since(info.ModTime()) &gt; f.ttl </span><span class="cov0" title="0">{
+                f.stats.Misses++
+                os.Remove(filePath)
+                return nil, ErrExpired
+        }</span>
+
+        <span class="cov0" title="0">data, err := os.ReadFile(filePath)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, err
+        }</span>
+
+        <span class="cov0" title="0">var value interface{}
+        if err := json.Unmarshal(data, &amp;value); err != nil </span><span class="cov0" title="0">{
+                return nil, err
+        }</span>
+
+        <span class="cov0" title="0">f.stats.Hits++
+        return value, nil</span>
+}
+
+func (f *FileCache) Set(key string, value interface{}, ttl time.Duration) error <span class="cov0" title="0">{
+        f.mu.Lock()
+        defer f.mu.Unlock()
+
+        data, err := json.MarshalIndent(value, "", "  ")
+        if err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+
+        <span class="cov0" title="0">filePath := f.getFilePath(key)
+        return os.WriteFile(filePath, data, 0644)</span>
+}
+
+func (f *FileCache) Delete(key string) error <span class="cov0" title="0">{
+        f.mu.Lock()
+        defer f.mu.Unlock()
+
+        filePath := f.getFilePath(key)
+
+        if err := os.Remove(filePath); err != nil </span><span class="cov0" title="0">{
+                if os.IsNotExist(err) </span><span class="cov0" title="0">{
+                        return ErrCacheMiss
+                }</span>
+                <span class="cov0" title="0">return err</span>
+        }
+
+        <span class="cov0" title="0">return nil</span>
+}
+
+func (f *FileCache) Clear() error <span class="cov0" title="0">{
+        f.mu.Lock()
+        defer f.mu.Unlock()
+
+        entries, err := os.ReadDir(f.cacheDir)
+        if err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+
+        <span class="cov0" title="0">for _, entry := range entries </span><span class="cov0" title="0">{
+                if !entry.IsDir() &amp;&amp; filepath.Ext(entry.Name()) == ".cache" </span><span class="cov0" title="0">{
+                        os.Remove(filepath.Join(f.cacheDir, entry.Name()))
+                }</span>
+        }
+
+        <span class="cov0" title="0">return nil</span>
+}
+
+func (f *FileCache) Stats() CacheStats <span class="cov0" title="0">{
+        f.mu.RLock()
+        defer f.mu.RUnlock()
+
+        entries, _ := os.ReadDir(f.cacheDir)
+        f.stats.Items = 0
+        f.stats.Size = 0
+
+        for _, entry := range entries </span><span class="cov0" title="0">{
+                if !entry.IsDir() &amp;&amp; filepath.Ext(entry.Name()) == ".cache" </span><span class="cov0" title="0">{
+                        f.stats.Items++
+                        if info, err := entry.Info(); err == nil </span><span class="cov0" title="0">{
+                                f.stats.Size += info.Size()
+                        }</span>
+                }
+        }
+
+        <span class="cov0" title="0">return f.stats</span>
+}
+
+func (f *FileCache) getFilePath(key string) string <span class="cov0" title="0">{
+        // Use a simple hash for the filename
+        return filepath.Join(f.cacheDir, fmt.Sprintf("%x.cache", key))
+}</span>
+
+func (f *FileCache) cleanupLoop() <span class="cov0" title="0">{
+        ticker := time.NewTicker(30 * time.Minute)
+        defer ticker.Stop()
+
+        for range ticker.C </span><span class="cov0" title="0">{
+                f.cleanup()
+        }</span>
+}
+
+func (f *FileCache) cleanup() <span class="cov0" title="0">{
+        f.mu.Lock()
+        defer f.mu.Unlock()
+
+        entries, err := os.ReadDir(f.cacheDir)
+        if err != nil </span><span class="cov0" title="0">{
+                return
+        }</span>
+
+        <span class="cov0" title="0">now := time.Now()
+
+        for _, entry := range entries </span><span class="cov0" title="0">{
+                if !entry.IsDir() &amp;&amp; filepath.Ext(entry.Name()) == ".cache" </span><span class="cov0" title="0">{
+                        filePath := filepath.Join(f.cacheDir, entry.Name())
+                        if info, err := entry.Info(); err == nil </span><span class="cov0" title="0">{
+                                if now.Sub(info.ModTime()) &gt; f.ttl </span><span class="cov0" title="0">{
+                                        os.Remove(filePath)
+                                        f.stats.Evictions++
+                                }</span>
+                        }
+                }
+        }
+
+        <span class="cov0" title="0">f.stats.LastClean = now</span>
+}
+
+// MultiLevelCache combines memory and file caches for optimal performance
+type MultiLevelCache struct {
+        memory *LRUCache
+        file   *FileCache
+        mu     sync.RWMutex
+}
+
+func NewMultiLevelCache(memSize int64, memItems int, cacheDir string, ttl time.Duration) (*MultiLevelCache, error) <span class="cov0" title="0">{
+        fileCache, err := NewFileCache(cacheDir, ttl)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, err
+        }</span>
+
+        <span class="cov0" title="0">return &amp;MultiLevelCache{
+                memory: NewLRUCache(memSize, memItems),
+                file:   fileCache,
+        }, nil</span>
+}
+
+func (m *MultiLevelCache) Get(key string) (interface{}, error) <span class="cov0" title="0">{
+        // Try memory cache first
+        if value, err := m.memory.Get(key); err == nil </span><span class="cov0" title="0">{
+                return value, nil
+        }</span>
+
+        // Fall back to file cache
+        <span class="cov0" title="0">value, err := m.file.Get(key)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, err
+        }</span>
+
+        // Promote to memory cache
+        <span class="cov0" title="0">m.memory.Set(key, value, 5*time.Minute)
+
+        return value, nil</span>
+}
+
+func (m *MultiLevelCache) Set(key string, value interface{}, ttl time.Duration) error <span class="cov0" title="0">{
+        // Write to both caches
+        if err := m.memory.Set(key, value, ttl); err != nil </span><span class="cov0" title="0">{
+                // Memory cache failure is not critical
+                fmt.Printf("Warning: failed to set memory cache: %v\n", err)
+        }</span>
+
+        <span class="cov0" title="0">return m.file.Set(key, value, ttl)</span>
+}
+
+func (m *MultiLevelCache) Delete(key string) error <span class="cov0" title="0">{
+        m.memory.Delete(key)
+        return m.file.Delete(key)
+}</span>
+
+func (m *MultiLevelCache) Clear() error <span class="cov0" title="0">{
+        m.memory.Clear()
+        return m.file.Clear()
+}</span>
+
+func (m *MultiLevelCache) Stats() CacheStats <span class="cov0" title="0">{
+        memStats := m.memory.Stats()
+        fileStats := m.file.Stats()
+
+        return CacheStats{
+                Hits:      memStats.Hits + fileStats.Hits,
+                Misses:    memStats.Misses + fileStats.Misses,
+                Evictions: memStats.Evictions + fileStats.Evictions,
+                Size:      memStats.Size + fileStats.Size,
+                Items:     memStats.Items + fileStats.Items,
+                LastClean: memStats.LastClean,
+        }
+}</span>
+</pre>
+		
+		<pre class="file" id="file4" style="display: none">package config
 
 import (
         "errors"
+        "fmt"
         "os"
         "path/filepath"
 
@@ -544,14 +2189,35 @@ func (l *Loader) validateAndSetDefaults(config *Config) (*Config, error) <span c
 
         <span class="cov8" title="1">if len(config.Layout.Columns) == 0 </span><span class="cov8" title="1">{
                 config.Layout = defaults.Layout
-        }</span>
+        }</span> else<span class="cov8" title="1"> {
+                // Merge layout defaults for missing fields
+                if config.Layout.TableStyle == "" </span><span class="cov0" title="0">{
+                        config.Layout.TableStyle = defaults.Layout.TableStyle
+                }</span>
+                <span class="cov8" title="1">if config.Layout.MaxWidth == 0 </span><span class="cov0" title="0">{
+                        config.Layout.MaxWidth = defaults.Layout.MaxWidth
+                }</span>
+        }
 
         <span class="cov8" title="1">if len(config.Keybinds) == 0 </span><span class="cov8" title="1">{
                 config.Keybinds = defaults.Keybinds
-        }</span>
+        }</span> else<span class="cov8" title="1"> {
+                // Merge keybind defaults for missing required keys
+                for key, value := range defaults.Keybinds </span><span class="cov8" title="1">{
+                        if _, exists := config.Keybinds[key]; !exists </span><span class="cov8" title="1">{
+                                config.Keybinds[key] = value
+                        }</span>
+                }
+        }
 
         <span class="cov8" title="1">if config.DataDir == "" </span><span class="cov8" title="1">{
                 config.DataDir = defaults.DataDir
+        }</span>
+
+        // Validate the configuration
+        <span class="cov8" title="1">validation := config.Validate()
+        if !validation.Valid </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("configuration validation failed: %v", validation.Errors)
         }</span>
 
         <span class="cov8" title="1">return config, nil</span>
@@ -566,7 +2232,7 @@ func (l *Loader) Save(config *Config, path string) error <span class="cov8" titl
 
         // Ensure directory exists
         <span class="cov8" title="1">dir := filepath.Dir(path)
-        if err := os.MkdirAll(dir, 0755); err != nil </span><span class="cov0" title="0">{
+        if err := os.MkdirAll(dir, 0755); err != nil </span><span class="cov8" title="1">{
                 return err
         }</span>
 
@@ -588,7 +2254,20 @@ func expandPath(path string) string <span class="cov8" title="1">{
 }
 </pre>
 		
-		<pre class="file" id="file4" style="display: none">package config
+		<pre class="file" id="file5" style="display: none">package config
+
+import (
+        "errors"
+        "fmt"
+)
+
+var (
+        ErrInvalidTheme      = errors.New("invalid theme")
+        ErrInvalidTableStyle = errors.New("invalid table style")
+        ErrInvalidColumn     = errors.New("invalid column")
+        ErrInvalidKeybind    = errors.New("invalid keybind")
+        ErrInvalidMaxWidth   = errors.New("invalid max width")
+)
 
 // Config represents the main application configuration
 type Config struct {
@@ -605,6 +2284,126 @@ type LayoutConfig struct {
         ShowCategories bool     `yaml:"show_categories" json:"show_categories"`
         TableStyle     string   `yaml:"table_style" json:"table_style"`
         MaxWidth       int      `yaml:"max_width" json:"max_width"`
+}
+
+// ValidationResult contains validation information
+type ValidationResult struct {
+        Valid  bool
+        Errors []error
+}
+
+// ValidThemes contains all supported themes
+var ValidThemes = []string{"default", "dark", "light", "minimal"}
+
+// ValidTableStyles contains all supported table styles
+var ValidTableStyles = []string{"simple", "rounded", "bold", "minimal"}
+
+// ValidColumns contains all supported columns
+var ValidColumns = []string{"shortcut", "description", "category", "tags", "platform"}
+
+// RequiredKeybinds contains all required keybind actions
+var RequiredKeybinds = []string{"quit", "up", "down", "left", "right"}
+
+// Validate validates the configuration and returns validation results
+func (c *Config) Validate() ValidationResult <span class="cov8" title="1">{
+        var errors []error
+
+        // Validate theme
+        if !isValidTheme(c.Theme) </span><span class="cov0" title="0">{
+                errors = append(errors, fmt.Errorf("%w: %s (valid: %v)", ErrInvalidTheme, c.Theme, ValidThemes))
+        }</span>
+
+        // Validate layout
+        <span class="cov8" title="1">if validationErrors := c.Layout.validate(); len(validationErrors) &gt; 0 </span><span class="cov0" title="0">{
+                errors = append(errors, validationErrors...)
+        }</span>
+
+        // Validate keybinds
+        <span class="cov8" title="1">if validationErrors := c.validateKeybinds(); len(validationErrors) &gt; 0 </span><span class="cov0" title="0">{
+                errors = append(errors, validationErrors...)
+        }</span>
+
+        <span class="cov8" title="1">return ValidationResult{
+                Valid:  len(errors) == 0,
+                Errors: errors,
+        }</span>
+}
+
+// validate validates the layout configuration
+func (l *LayoutConfig) validate() []error <span class="cov8" title="1">{
+        var errors []error
+
+        // Validate columns
+        for _, column := range l.Columns </span><span class="cov8" title="1">{
+                if !isValidColumn(column) </span><span class="cov0" title="0">{
+                        errors = append(errors, fmt.Errorf("%w: %s (valid: %v)", ErrInvalidColumn, column, ValidColumns))
+                }</span>
+        }
+
+        // Validate table style
+        <span class="cov8" title="1">if !isValidTableStyle(l.TableStyle) </span><span class="cov0" title="0">{
+                errors = append(errors, fmt.Errorf("%w: %s (valid: %v)", ErrInvalidTableStyle, l.TableStyle, ValidTableStyles))
+        }</span>
+
+        // Validate max width
+        <span class="cov8" title="1">if l.MaxWidth &lt; 40 || l.MaxWidth &gt; 200 </span><span class="cov0" title="0">{
+                errors = append(errors, fmt.Errorf("%w: %d (must be between 40 and 200)", ErrInvalidMaxWidth, l.MaxWidth))
+        }</span>
+
+        <span class="cov8" title="1">return errors</span>
+}
+
+// validateKeybinds validates the keybind configuration
+func (c *Config) validateKeybinds() []error <span class="cov8" title="1">{
+        var errors []error
+
+        // Check for required keybinds
+        for _, required := range RequiredKeybinds </span><span class="cov8" title="1">{
+                if _, exists := c.Keybinds[required]; !exists </span><span class="cov0" title="0">{
+                        errors = append(errors, fmt.Errorf("%w: missing required keybind '%s'", ErrInvalidKeybind, required))
+                }</span>
+        }
+
+        // Check for duplicate keybind values
+        <span class="cov8" title="1">usedKeys := make(map[string]string)
+        for action, key := range c.Keybinds </span><span class="cov8" title="1">{
+                if existingAction, exists := usedKeys[key]; exists </span><span class="cov0" title="0">{
+                        errors = append(errors, fmt.Errorf("%w: key '%s' used by both '%s' and '%s'", ErrInvalidKeybind, key, existingAction, action))
+                }</span>
+                <span class="cov8" title="1">usedKeys[key] = action</span>
+        }
+
+        <span class="cov8" title="1">return errors</span>
+}
+
+// isValidTheme checks if the theme is valid
+func isValidTheme(theme string) bool <span class="cov8" title="1">{
+        for _, valid := range ValidThemes </span><span class="cov8" title="1">{
+                if theme == valid </span><span class="cov8" title="1">{
+                        return true
+                }</span>
+        }
+        <span class="cov0" title="0">return false</span>
+}
+
+// isValidTableStyle checks if the table style is valid
+func isValidTableStyle(style string) bool <span class="cov8" title="1">{
+        for _, valid := range ValidTableStyles </span><span class="cov8" title="1">{
+                if style == valid </span><span class="cov8" title="1">{
+                        return true
+                }</span>
+        }
+        <span class="cov0" title="0">return false</span>
+}
+
+// isValidColumn checks if the column is valid
+func isValidColumn(column string) bool <span class="cov8" title="1">{
+        for _, valid := range ValidColumns </span><span class="cov8" title="1">{
+                if column == valid </span><span class="cov8" title="1">{
+                        return true
+                }</span>
+        }
+        <span class="cov0" title="0">return false</span>
 }
 
 // DefaultConfig returns a default configuration
@@ -633,7 +2432,1820 @@ func DefaultConfig() *Config <span class="cov8" title="1">{
 }</span>
 </pre>
 		
-		<pre class="file" id="file5" style="display: none">package ui
+		<pre class="file" id="file6" style="display: none">package notes
+
+import (
+        "cheat-go/pkg/apps"
+        "encoding/json"
+        "errors"
+        "fmt"
+        "io"
+        "os"
+        "path/filepath"
+        "sort"
+        "strings"
+        "sync"
+        "time"
+
+        "gopkg.in/yaml.v3"
+)
+
+var (
+        ErrNoteNotFound  = errors.New("note not found")
+        ErrInvalidFormat = errors.New("invalid format")
+        ErrNoteExists    = errors.New("note already exists")
+)
+
+type FileManager struct {
+        dataDir string
+        mu      sync.RWMutex
+        notes   map[string]*Note
+}
+
+func NewFileManager(dataDir string) (*FileManager, error) <span class="cov8" title="1">{
+        if err := os.MkdirAll(dataDir, 0755); err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("failed to create notes directory: %w", err)
+        }</span>
+
+        <span class="cov8" title="1">fm := &amp;FileManager{
+                dataDir: dataDir,
+                notes:   make(map[string]*Note),
+        }
+
+        if err := fm.loadNotes(); err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("failed to load notes: %w", err)
+        }</span>
+
+        <span class="cov8" title="1">return fm, nil</span>
+}
+
+func (fm *FileManager) loadNotes() error <span class="cov8" title="1">{
+        notesFile := filepath.Join(fm.dataDir, "notes.json")
+
+        if _, err := os.Stat(notesFile); os.IsNotExist(err) </span><span class="cov8" title="1">{
+                return nil
+        }</span>
+
+        <span class="cov8" title="1">data, err := os.ReadFile(notesFile)
+        if err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to read notes file: %w", err)
+        }</span>
+
+        <span class="cov8" title="1">var notes []*Note
+        if err := json.Unmarshal(data, &amp;notes); err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to unmarshal notes: %w", err)
+        }</span>
+
+        <span class="cov8" title="1">for _, note := range notes </span><span class="cov8" title="1">{
+                fm.notes[note.ID] = note
+        }</span>
+
+        <span class="cov8" title="1">return nil</span>
+}
+
+func (fm *FileManager) saveNotes() error <span class="cov8" title="1">{
+        notesFile := filepath.Join(fm.dataDir, "notes.json")
+
+        notes := make([]*Note, 0, len(fm.notes))
+        for _, note := range fm.notes </span><span class="cov8" title="1">{
+                notes = append(notes, note)
+        }</span>
+
+        <span class="cov8" title="1">data, err := json.MarshalIndent(notes, "", "  ")
+        if err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to marshal notes: %w", err)
+        }</span>
+
+        <span class="cov8" title="1">if err := os.WriteFile(notesFile, data, 0644); err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to write notes file: %w", err)
+        }</span>
+
+        <span class="cov8" title="1">return nil</span>
+}
+
+func (fm *FileManager) CreateNote(note *Note) error <span class="cov8" title="1">{
+        fm.mu.Lock()
+        defer fm.mu.Unlock()
+
+        if note.ID == "" </span><span class="cov8" title="1">{
+                note.ID = generateID()
+        }</span>
+
+        <span class="cov8" title="1">if _, exists := fm.notes[note.ID]; exists </span><span class="cov8" title="1">{
+                return ErrNoteExists
+        }</span>
+
+        <span class="cov8" title="1">note.CreatedAt = time.Now()
+        note.UpdatedAt = time.Now()
+
+        fm.notes[note.ID] = note
+        return fm.saveNotes()</span>
+}
+
+func (fm *FileManager) GetNote(id string) (*Note, error) <span class="cov8" title="1">{
+        fm.mu.RLock()
+        defer fm.mu.RUnlock()
+
+        note, exists := fm.notes[id]
+        if !exists </span><span class="cov8" title="1">{
+                return nil, ErrNoteNotFound
+        }</span>
+
+        <span class="cov8" title="1">return note, nil</span>
+}
+
+func (fm *FileManager) UpdateNote(id string, updatedNote *Note) error <span class="cov8" title="1">{
+        fm.mu.Lock()
+        defer fm.mu.Unlock()
+
+        note, exists := fm.notes[id]
+        if !exists </span><span class="cov0" title="0">{
+                return ErrNoteNotFound
+        }</span>
+
+        <span class="cov8" title="1">updatedNote.ID = id
+        updatedNote.CreatedAt = note.CreatedAt
+        updatedNote.UpdatedAt = time.Now()
+
+        fm.notes[id] = updatedNote
+        return fm.saveNotes()</span>
+}
+
+func (fm *FileManager) DeleteNote(id string) error <span class="cov8" title="1">{
+        fm.mu.Lock()
+        defer fm.mu.Unlock()
+
+        if _, exists := fm.notes[id]; !exists </span><span class="cov8" title="1">{
+                return ErrNoteNotFound
+        }</span>
+
+        <span class="cov8" title="1">delete(fm.notes, id)
+        return fm.saveNotes()</span>
+}
+
+func (fm *FileManager) SearchNotes(opts SearchOptions) ([]*Note, error) <span class="cov8" title="1">{
+        fm.mu.RLock()
+        defer fm.mu.RUnlock()
+
+        results := []*Note{}
+
+        for _, note := range fm.notes </span><span class="cov8" title="1">{
+                if !matchesSearchOptions(note, opts) </span><span class="cov8" title="1">{
+                        continue</span>
+                }
+                <span class="cov8" title="1">results = append(results, note)</span>
+        }
+
+        <span class="cov8" title="1">sortNotes(results, opts.SortBy)
+
+        if opts.Limit &gt; 0 &amp;&amp; len(results) &gt; opts.Limit </span><span class="cov0" title="0">{
+                results = results[opts.Offset:min(opts.Offset+opts.Limit, len(results))]
+        }</span>
+
+        <span class="cov8" title="1">return results, nil</span>
+}
+
+func (fm *FileManager) ListNotes() ([]*Note, error) <span class="cov8" title="1">{
+        fm.mu.RLock()
+        defer fm.mu.RUnlock()
+
+        notes := make([]*Note, 0, len(fm.notes))
+        for _, note := range fm.notes </span><span class="cov8" title="1">{
+                notes = append(notes, note)
+        }</span>
+
+        <span class="cov8" title="1">sortNotes(notes, "updated_at")
+        return notes, nil</span>
+}
+
+func (fm *FileManager) AddShortcutToNote(noteID string, shortcut apps.Shortcut) error <span class="cov8" title="1">{
+        fm.mu.Lock()
+        defer fm.mu.Unlock()
+
+        note, exists := fm.notes[noteID]
+        if !exists </span><span class="cov0" title="0">{
+                return ErrNoteNotFound
+        }</span>
+
+        <span class="cov8" title="1">note.Shortcuts = append(note.Shortcuts, shortcut)
+        note.UpdatedAt = time.Now()
+
+        return fm.saveNotes()</span>
+}
+
+func (fm *FileManager) RemoveShortcutFromNote(noteID string, shortcutIndex int) error <span class="cov8" title="1">{
+        fm.mu.Lock()
+        defer fm.mu.Unlock()
+
+        note, exists := fm.notes[noteID]
+        if !exists </span><span class="cov0" title="0">{
+                return ErrNoteNotFound
+        }</span>
+
+        <span class="cov8" title="1">if shortcutIndex &lt; 0 || shortcutIndex &gt;= len(note.Shortcuts) </span><span class="cov8" title="1">{
+                return fmt.Errorf("invalid shortcut index")
+        }</span>
+
+        <span class="cov8" title="1">note.Shortcuts = append(note.Shortcuts[:shortcutIndex], note.Shortcuts[shortcutIndex+1:]...)
+        note.UpdatedAt = time.Now()
+
+        return fm.saveNotes()</span>
+}
+
+func (fm *FileManager) ToggleFavorite(id string) error <span class="cov8" title="1">{
+        fm.mu.Lock()
+        defer fm.mu.Unlock()
+
+        note, exists := fm.notes[id]
+        if !exists </span><span class="cov0" title="0">{
+                return ErrNoteNotFound
+        }</span>
+
+        <span class="cov8" title="1">note.IsFavorite = !note.IsFavorite
+        note.UpdatedAt = time.Now()
+
+        return fm.saveNotes()</span>
+}
+
+func (fm *FileManager) ExportNotes(format string) ([]byte, error) <span class="cov8" title="1">{
+        fm.mu.RLock()
+        defer fm.mu.RUnlock()
+
+        notes := make([]*Note, 0, len(fm.notes))
+        for _, note := range fm.notes </span><span class="cov8" title="1">{
+                notes = append(notes, note)
+        }</span>
+
+        <span class="cov8" title="1">switch format </span>{
+        case "json":<span class="cov8" title="1">
+                return json.MarshalIndent(notes, "", "  ")</span>
+        case "yaml", "yml":<span class="cov8" title="1">
+                return yaml.Marshal(notes)</span>
+        case "markdown", "md":<span class="cov8" title="1">
+                return exportToMarkdown(notes), nil</span>
+        default:<span class="cov8" title="1">
+                return nil, ErrInvalidFormat</span>
+        }
+}
+
+func (fm *FileManager) ImportNotes(data []byte, format string) error <span class="cov8" title="1">{
+        var notes []*Note
+
+        switch format </span>{
+        case "json":<span class="cov8" title="1">
+                if err := json.Unmarshal(data, &amp;notes); err != nil </span><span class="cov0" title="0">{
+                        return fmt.Errorf("failed to unmarshal JSON: %w", err)
+                }</span>
+        case "yaml", "yml":<span class="cov0" title="0">
+                if err := yaml.Unmarshal(data, &amp;notes); err != nil </span><span class="cov0" title="0">{
+                        return fmt.Errorf("failed to unmarshal YAML: %w", err)
+                }</span>
+        default:<span class="cov0" title="0">
+                return ErrInvalidFormat</span>
+        }
+
+        <span class="cov8" title="1">fm.mu.Lock()
+        defer fm.mu.Unlock()
+
+        for _, note := range notes </span><span class="cov8" title="1">{
+                if note.ID == "" </span><span class="cov0" title="0">{
+                        note.ID = generateID()
+                }</span>
+                <span class="cov8" title="1">if _, exists := fm.notes[note.ID]; !exists </span><span class="cov8" title="1">{
+                        fm.notes[note.ID] = note
+                }</span>
+        }
+
+        <span class="cov8" title="1">return fm.saveNotes()</span>
+}
+
+func matchesSearchOptions(note *Note, opts SearchOptions) bool <span class="cov8" title="1">{
+        if opts.Query != "" </span><span class="cov8" title="1">{
+                query := strings.ToLower(opts.Query)
+                if !strings.Contains(strings.ToLower(note.Title), query) &amp;&amp;
+                        !strings.Contains(strings.ToLower(note.Content), query) </span><span class="cov8" title="1">{
+                        return false
+                }</span>
+        }
+
+        <span class="cov8" title="1">if opts.AppName != "" &amp;&amp; note.AppName != opts.AppName </span><span class="cov8" title="1">{
+                return false
+        }</span>
+
+        <span class="cov8" title="1">if opts.Category != "" &amp;&amp; note.Category != opts.Category </span><span class="cov8" title="1">{
+                return false
+        }</span>
+
+        <span class="cov8" title="1">if opts.OnlyFavorites &amp;&amp; !note.IsFavorite </span><span class="cov8" title="1">{
+                return false
+        }</span>
+
+        <span class="cov8" title="1">if len(opts.Tags) &gt; 0 </span><span class="cov8" title="1">{
+                hasTag := false
+                for _, searchTag := range opts.Tags </span><span class="cov8" title="1">{
+                        for _, noteTag := range note.Tags </span><span class="cov8" title="1">{
+                                if searchTag == noteTag </span><span class="cov8" title="1">{
+                                        hasTag = true
+                                        break</span>
+                                }
+                        }
+                        <span class="cov8" title="1">if hasTag </span><span class="cov8" title="1">{
+                                break</span>
+                        }
+                }
+                <span class="cov8" title="1">if !hasTag </span><span class="cov8" title="1">{
+                        return false
+                }</span>
+        }
+
+        <span class="cov8" title="1">return true</span>
+}
+
+func sortNotes(notes []*Note, sortBy string) <span class="cov8" title="1">{
+        switch sortBy </span>{
+        case "title":<span class="cov8" title="1">
+                sort.Slice(notes, func(i, j int) bool </span><span class="cov8" title="1">{
+                        return notes[i].Title &lt; notes[j].Title
+                }</span>)
+        case "created_at":<span class="cov8" title="1">
+                sort.Slice(notes, func(i, j int) bool </span><span class="cov8" title="1">{
+                        return notes[i].CreatedAt.After(notes[j].CreatedAt)
+                }</span>)
+        case "updated_at", "":<span class="cov8" title="1">
+                sort.Slice(notes, func(i, j int) bool </span><span class="cov8" title="1">{
+                        return notes[i].UpdatedAt.After(notes[j].UpdatedAt)
+                }</span>)
+        }
+}
+
+func exportToMarkdown(notes []*Note) []byte <span class="cov8" title="1">{
+        var sb strings.Builder
+
+        sb.WriteString("# Personal Notes\n\n")
+
+        for _, note := range notes </span><span class="cov8" title="1">{
+                if note.IsFavorite </span><span class="cov8" title="1">{
+                        sb.WriteString("⭐ ")
+                }</span>
+                <span class="cov8" title="1">sb.WriteString(fmt.Sprintf("## %s\n\n", note.Title))
+
+                if note.AppName != "" </span><span class="cov0" title="0">{
+                        sb.WriteString(fmt.Sprintf("**App:** %s\n", note.AppName))
+                }</span>
+                <span class="cov8" title="1">if note.Category != "" </span><span class="cov0" title="0">{
+                        sb.WriteString(fmt.Sprintf("**Category:** %s\n", note.Category))
+                }</span>
+                <span class="cov8" title="1">if len(note.Tags) &gt; 0 </span><span class="cov8" title="1">{
+                        sb.WriteString(fmt.Sprintf("**Tags:** %s\n", strings.Join(note.Tags, ", ")))
+                }</span>
+
+                <span class="cov8" title="1">sb.WriteString(fmt.Sprintf("\n%s\n", note.Content))
+
+                if len(note.Shortcuts) &gt; 0 </span><span class="cov8" title="1">{
+                        sb.WriteString("\n### Shortcuts\n\n")
+                        for _, shortcut := range note.Shortcuts </span><span class="cov8" title="1">{
+                                sb.WriteString(fmt.Sprintf("- `%s`: %s\n", shortcut.Keys, shortcut.Description))
+                        }</span>
+                }
+
+                <span class="cov8" title="1">sb.WriteString(fmt.Sprintf("\n*Created: %s | Updated: %s*\n\n---\n\n",
+                        note.CreatedAt.Format("2006-01-02"),
+                        note.UpdatedAt.Format("2006-01-02")))</span>
+        }
+
+        <span class="cov8" title="1">return []byte(sb.String())</span>
+}
+
+func generateID() string <span class="cov8" title="1">{
+        return fmt.Sprintf("note-%d", time.Now().UnixNano())
+}</span>
+
+func min(a, b int) int <span class="cov0" title="0">{
+        if a &lt; b </span><span class="cov0" title="0">{
+                return a
+        }</span>
+        <span class="cov0" title="0">return b</span>
+}
+
+type CloudSyncer struct {
+        local     Manager
+        remote    io.ReadWriter
+        conflicts []Conflict
+        mu        sync.RWMutex
+}
+
+func NewCloudSyncer(local Manager, remote io.ReadWriter) *CloudSyncer <span class="cov8" title="1">{
+        return &amp;CloudSyncer{
+                local:     local,
+                remote:    remote,
+                conflicts: []Conflict{},
+        }
+}</span>
+
+func (cs *CloudSyncer) Sync() (*SyncStatus, error) <span class="cov8" title="1">{
+        cs.mu.Lock()
+        defer cs.mu.Unlock()
+
+        localNotes, err := cs.local.ListNotes()
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("failed to get local notes: %w", err)
+        }</span>
+
+        <span class="cov8" title="1">remoteData, err := io.ReadAll(cs.remote)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("failed to read remote notes: %w", err)
+        }</span>
+
+        <span class="cov8" title="1">var remoteNotes []*Note
+        if len(remoteData) &gt; 0 </span><span class="cov8" title="1">{
+                if err := json.Unmarshal(remoteData, &amp;remoteNotes); err != nil </span><span class="cov0" title="0">{
+                        return nil, fmt.Errorf("failed to unmarshal remote notes: %w", err)
+                }</span>
+        }
+
+        <span class="cov8" title="1">cs.conflicts = detectConflicts(localNotes, remoteNotes)
+
+        status := &amp;SyncStatus{
+                LastSync:     time.Now(),
+                TotalNotes:   len(localNotes),
+                SyncedNotes:  len(localNotes) - len(cs.conflicts),
+                HasConflicts: len(cs.conflicts) &gt; 0,
+                Conflicts:    cs.conflicts,
+        }
+
+        return status, nil</span>
+}
+
+func (cs *CloudSyncer) ResolveConflict(conflict Conflict, resolution Resolution) error <span class="cov8" title="1">{
+        cs.mu.Lock()
+        defer cs.mu.Unlock()
+
+        switch resolution </span>{
+        case KeepLocal:<span class="cov8" title="1">
+                // Keep local version, no action needed
+                return nil</span>
+        case KeepRemote:<span class="cov8" title="1">
+                // Update local with remote version
+                return cs.local.UpdateNote(conflict.NoteID, conflict.RemoteNote)</span>
+        case Merge:<span class="cov8" title="1">
+                // Merge notes (simple strategy: combine content)
+                merged := mergeNotes(conflict.LocalNote, conflict.RemoteNote)
+                return cs.local.UpdateNote(conflict.NoteID, merged)</span>
+        default:<span class="cov0" title="0">
+                return fmt.Errorf("invalid resolution type")</span>
+        }
+}
+
+func (cs *CloudSyncer) AutoResolve(conflicts []Conflict) error <span class="cov0" title="0">{
+        for _, conflict := range conflicts </span><span class="cov0" title="0">{
+                resolution := determineAutoResolution(conflict)
+                if err := cs.ResolveConflict(conflict, resolution); err != nil </span><span class="cov0" title="0">{
+                        return fmt.Errorf("failed to resolve conflict for note %s: %w", conflict.NoteID, err)
+                }</span>
+        }
+        <span class="cov0" title="0">return nil</span>
+}
+
+func detectConflicts(local, remote []*Note) []Conflict <span class="cov8" title="1">{
+        conflicts := []Conflict{}
+        remoteMap := make(map[string]*Note)
+
+        for _, note := range remote </span><span class="cov8" title="1">{
+                remoteMap[note.ID] = note
+        }</span>
+
+        <span class="cov8" title="1">for _, localNote := range local </span><span class="cov8" title="1">{
+                if remoteNote, exists := remoteMap[localNote.ID]; exists </span><span class="cov8" title="1">{
+                        if localNote.UpdatedAt != remoteNote.UpdatedAt </span><span class="cov8" title="1">{
+                                conflicts = append(conflicts, Conflict{
+                                        NoteID:     localNote.ID,
+                                        LocalNote:  localNote,
+                                        RemoteNote: remoteNote,
+                                        DetectedAt: time.Now(),
+                                })
+                        }</span>
+                }
+        }
+
+        <span class="cov8" title="1">return conflicts</span>
+}
+
+func mergeNotes(local, remote *Note) *Note <span class="cov8" title="1">{
+        merged := &amp;Note{
+                ID:         local.ID,
+                Title:      local.Title,
+                Content:    fmt.Sprintf("%s\n\n--- Remote Version ---\n\n%s", local.Content, remote.Content),
+                AppName:    local.AppName,
+                Category:   local.Category,
+                Tags:       mergeTags(local.Tags, remote.Tags),
+                CreatedAt:  local.CreatedAt,
+                UpdatedAt:  time.Now(),
+                IsFavorite: local.IsFavorite || remote.IsFavorite,
+                Shortcuts:  mergeShortcuts(local.Shortcuts, remote.Shortcuts),
+        }
+
+        if remote.UpdatedAt.After(local.UpdatedAt) </span><span class="cov8" title="1">{
+                merged.Title = remote.Title
+                merged.AppName = remote.AppName
+                merged.Category = remote.Category
+        }</span>
+
+        <span class="cov8" title="1">return merged</span>
+}
+
+func mergeTags(local, remote []string) []string <span class="cov8" title="1">{
+        tagMap := make(map[string]bool)
+        for _, tag := range local </span><span class="cov0" title="0">{
+                tagMap[tag] = true
+        }</span>
+        <span class="cov8" title="1">for _, tag := range remote </span><span class="cov0" title="0">{
+                tagMap[tag] = true
+        }</span>
+
+        <span class="cov8" title="1">merged := []string{}
+        for tag := range tagMap </span><span class="cov0" title="0">{
+                merged = append(merged, tag)
+        }</span>
+        <span class="cov8" title="1">sort.Strings(merged)
+        return merged</span>
+}
+
+func mergeShortcuts(local, remote []apps.Shortcut) []apps.Shortcut <span class="cov8" title="1">{
+        shortcutMap := make(map[string]apps.Shortcut)
+
+        for _, s := range local </span><span class="cov0" title="0">{
+                shortcutMap[s.Keys] = s
+        }</span>
+        <span class="cov8" title="1">for _, s := range remote </span><span class="cov0" title="0">{
+                if _, exists := shortcutMap[s.Keys]; !exists </span><span class="cov0" title="0">{
+                        shortcutMap[s.Keys] = s
+                }</span>
+        }
+
+        <span class="cov8" title="1">merged := []apps.Shortcut{}
+        for _, s := range shortcutMap </span><span class="cov0" title="0">{
+                merged = append(merged, s)
+        }</span>
+
+        <span class="cov8" title="1">return merged</span>
+}
+
+func determineAutoResolution(conflict Conflict) Resolution <span class="cov0" title="0">{
+        if conflict.LocalNote.UpdatedAt.After(conflict.RemoteNote.UpdatedAt) </span><span class="cov0" title="0">{
+                return KeepLocal
+        }</span>
+        <span class="cov0" title="0">return KeepRemote</span>
+}
+</pre>
+		
+		<pre class="file" id="file7" style="display: none">package online
+
+import (
+        "bytes"
+        "cheat-go/pkg/apps"
+        "encoding/json"
+        "fmt"
+        "io"
+        "net/http"
+        "net/url"
+        "strings"
+        "sync"
+        "time"
+)
+
+type HTTPClient struct {
+        baseURL    string
+        httpClient *http.Client
+        cache      *cache
+        mu         sync.RWMutex
+}
+
+type cache struct {
+        repositories []Repository
+        cheatSheets  map[string]*CheatSheet
+        lastUpdated  time.Time
+        ttl          time.Duration
+}
+
+func NewHTTPClient(baseURL string) *HTTPClient <span class="cov8" title="1">{
+        return &amp;HTTPClient{
+                baseURL: baseURL,
+                httpClient: &amp;http.Client{
+                        Timeout: 30 * time.Second,
+                },
+                cache: &amp;cache{
+                        cheatSheets: make(map[string]*CheatSheet),
+                        ttl:         15 * time.Minute,
+                },
+        }
+}</span>
+
+func (c *HTTPClient) GetRepositories() ([]Repository, error) <span class="cov8" title="1">{
+        c.mu.RLock()
+        if time.Since(c.cache.lastUpdated) &lt; c.cache.ttl &amp;&amp; len(c.cache.repositories) &gt; 0 </span><span class="cov0" title="0">{
+                repos := c.cache.repositories
+                c.mu.RUnlock()
+                return repos, nil
+        }</span>
+        <span class="cov8" title="1">c.mu.RUnlock()
+
+        resp, err := c.httpClient.Get(c.baseURL + "/api/repositories")
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("failed to fetch repositories: %w", err)
+        }</span>
+        <span class="cov8" title="1">defer resp.Body.Close()
+
+        if resp.StatusCode != http.StatusOK </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+        }</span>
+
+        <span class="cov8" title="1">var repos []Repository
+        if err := json.NewDecoder(resp.Body).Decode(&amp;repos); err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("failed to decode repositories: %w", err)
+        }</span>
+
+        <span class="cov8" title="1">c.mu.Lock()
+        c.cache.repositories = repos
+        c.cache.lastUpdated = time.Now()
+        c.mu.Unlock()
+
+        return repos, nil</span>
+}
+
+func (c *HTTPClient) SearchCheatSheets(opts SearchOptions) ([]CheatSheet, error) <span class="cov8" title="1">{
+        params := url.Values{}
+        if opts.Query != "" </span><span class="cov8" title="1">{
+                params.Add("q", opts.Query)
+        }</span>
+        <span class="cov8" title="1">if len(opts.Tags) &gt; 0 </span><span class="cov0" title="0">{
+                params.Add("tags", strings.Join(opts.Tags, ","))
+        }</span>
+        <span class="cov8" title="1">if opts.Repository != "" </span><span class="cov0" title="0">{
+                params.Add("repository", opts.Repository)
+        }</span>
+        <span class="cov8" title="1">if opts.MinRating &gt; 0 </span><span class="cov8" title="1">{
+                params.Add("min_rating", fmt.Sprintf("%.1f", opts.MinRating))
+        }</span>
+        <span class="cov8" title="1">if opts.SortBy != "" </span><span class="cov0" title="0">{
+                params.Add("sort", opts.SortBy)
+        }</span>
+        <span class="cov8" title="1">if opts.Limit &gt; 0 </span><span class="cov8" title="1">{
+                params.Add("limit", fmt.Sprintf("%d", opts.Limit))
+        }</span>
+        <span class="cov8" title="1">if opts.Offset &gt; 0 </span><span class="cov0" title="0">{
+                params.Add("offset", fmt.Sprintf("%d", opts.Offset))
+        }</span>
+
+        <span class="cov8" title="1">url := fmt.Sprintf("%s/api/cheatsheets?%s", c.baseURL, params.Encode())
+        resp, err := c.httpClient.Get(url)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("failed to search cheat sheets: %w", err)
+        }</span>
+        <span class="cov8" title="1">defer resp.Body.Close()
+
+        if resp.StatusCode != http.StatusOK </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+        }</span>
+
+        <span class="cov8" title="1">var sheets []CheatSheet
+        if err := json.NewDecoder(resp.Body).Decode(&amp;sheets); err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("failed to decode cheat sheets: %w", err)
+        }</span>
+
+        <span class="cov8" title="1">return sheets, nil</span>
+}
+
+func (c *HTTPClient) GetCheatSheet(id string) (*CheatSheet, error) <span class="cov8" title="1">{
+        c.mu.RLock()
+        if cached, exists := c.cache.cheatSheets[id]; exists </span><span class="cov8" title="1">{
+                c.mu.RUnlock()
+                return cached, nil
+        }</span>
+        <span class="cov8" title="1">c.mu.RUnlock()
+
+        resp, err := c.httpClient.Get(fmt.Sprintf("%s/api/cheatsheets/%s", c.baseURL, id))
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("failed to fetch cheat sheet: %w", err)
+        }</span>
+        <span class="cov8" title="1">defer resp.Body.Close()
+
+        if resp.StatusCode == http.StatusNotFound </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("cheat sheet not found")
+        }</span>
+        <span class="cov8" title="1">if resp.StatusCode != http.StatusOK </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+        }</span>
+
+        <span class="cov8" title="1">var sheet CheatSheet
+        if err := json.NewDecoder(resp.Body).Decode(&amp;sheet); err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("failed to decode cheat sheet: %w", err)
+        }</span>
+
+        <span class="cov8" title="1">c.mu.Lock()
+        c.cache.cheatSheets[id] = &amp;sheet
+        c.mu.Unlock()
+
+        return &amp;sheet, nil</span>
+}
+
+func (c *HTTPClient) DownloadCheatSheet(id string) (*apps.App, error) <span class="cov0" title="0">{
+        sheet, err := c.GetCheatSheet(id)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, err
+        }</span>
+
+        <span class="cov0" title="0">return &amp;sheet.App, nil</span>
+}
+
+func (c *HTTPClient) SubmitCheatSheet(sheet CheatSheet) error <span class="cov8" title="1">{
+        data, err := json.Marshal(sheet)
+        if err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to marshal cheat sheet: %w", err)
+        }</span>
+
+        <span class="cov8" title="1">resp, err := c.httpClient.Post(
+                c.baseURL+"/api/cheatsheets",
+                "application/json",
+                bytes.NewReader(data),
+        )
+        if err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to submit cheat sheet: %w", err)
+        }</span>
+        <span class="cov8" title="1">defer resp.Body.Close()
+
+        if resp.StatusCode != http.StatusCreated &amp;&amp; resp.StatusCode != http.StatusOK </span><span class="cov0" title="0">{
+                body, _ := io.ReadAll(resp.Body)
+                return fmt.Errorf("failed to submit cheat sheet: %s", body)
+        }</span>
+
+        <span class="cov8" title="1">return nil</span>
+}
+
+func (c *HTTPClient) RateCheatSheet(id string, rating float64) error <span class="cov8" title="1">{
+        if rating &lt; 1 || rating &gt; 5 </span><span class="cov8" title="1">{
+                return fmt.Errorf("rating must be between 1 and 5")
+        }</span>
+
+        <span class="cov8" title="1">data, _ := json.Marshal(map[string]float64{"rating": rating})
+
+        req, err := http.NewRequest(
+                "POST",
+                fmt.Sprintf("%s/api/cheatsheets/%s/rate", c.baseURL, id),
+                bytes.NewReader(data),
+        )
+        if err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to create request: %w", err)
+        }</span>
+        <span class="cov8" title="1">req.Header.Set("Content-Type", "application/json")
+
+        resp, err := c.httpClient.Do(req)
+        if err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to rate cheat sheet: %w", err)
+        }</span>
+        <span class="cov8" title="1">defer resp.Body.Close()
+
+        if resp.StatusCode != http.StatusOK </span><span class="cov0" title="0">{
+                body, _ := io.ReadAll(resp.Body)
+                return fmt.Errorf("failed to rate cheat sheet: %s", body)
+        }</span>
+
+        <span class="cov8" title="1">delete(c.cache.cheatSheets, id)
+
+        return nil</span>
+}
+
+type MockClient struct {
+        repositories []Repository
+        cheatSheets  []CheatSheet
+        mu           sync.RWMutex
+}
+
+func NewMockClient() *MockClient <span class="cov8" title="1">{
+        return &amp;MockClient{
+                repositories: defaultRepositories(),
+                cheatSheets:  defaultCheatSheets(),
+        }
+}</span>
+
+func defaultRepositories() []Repository <span class="cov8" title="1">{
+        return []Repository{
+                {
+                        URL:         "https://github.com/cheat-go/community",
+                        Name:        "Official Community Repository",
+                        Description: "Official cheat sheets maintained by the community",
+                        LastUpdated: time.Now().Add(-24 * time.Hour),
+                        Stars:       1250,
+                        Author:      "cheat-go",
+                },
+                {
+                        URL:         "https://github.com/awesome/cheatsheets",
+                        Name:        "Awesome Cheat Sheets",
+                        Description: "A curated collection of awesome cheat sheets",
+                        LastUpdated: time.Now().Add(-48 * time.Hour),
+                        Stars:       890,
+                        Author:      "awesome",
+                },
+        }
+}</span>
+
+func defaultCheatSheets() []CheatSheet <span class="cov8" title="1">{
+        return []CheatSheet{
+                {
+                        ID:          "vim-advanced",
+                        Name:        "Vim Advanced",
+                        Description: "Advanced Vim shortcuts and commands",
+                        Repository:  "https://github.com/cheat-go/community",
+                        Downloads:   5420,
+                        Rating:      4.8,
+                        CreatedAt:   time.Now().Add(-30 * 24 * time.Hour),
+                        UpdatedAt:   time.Now().Add(-2 * 24 * time.Hour),
+                        Tags:        []string{"vim", "editor", "advanced"},
+                },
+                {
+                        ID:          "git-workflow",
+                        Name:        "Git Workflow",
+                        Description: "Complete Git workflow commands",
+                        Repository:  "https://github.com/cheat-go/community",
+                        Downloads:   3210,
+                        Rating:      4.6,
+                        CreatedAt:   time.Now().Add(-45 * 24 * time.Hour),
+                        UpdatedAt:   time.Now().Add(-5 * 24 * time.Hour),
+                        Tags:        []string{"git", "vcs", "workflow"},
+                },
+        }
+}</span>
+
+func (m *MockClient) GetRepositories() ([]Repository, error) <span class="cov8" title="1">{
+        m.mu.RLock()
+        defer m.mu.RUnlock()
+        return m.repositories, nil
+}</span>
+
+func (m *MockClient) SearchCheatSheets(opts SearchOptions) ([]CheatSheet, error) <span class="cov8" title="1">{
+        m.mu.RLock()
+        defer m.mu.RUnlock()
+
+        results := []CheatSheet{}
+        for _, sheet := range m.cheatSheets </span><span class="cov8" title="1">{
+                if opts.Query != "" &amp;&amp; !strings.Contains(strings.ToLower(sheet.Name), strings.ToLower(opts.Query)) </span><span class="cov8" title="1">{
+                        continue</span>
+                }
+                <span class="cov8" title="1">if opts.MinRating &gt; 0 &amp;&amp; sheet.Rating &lt; opts.MinRating </span><span class="cov0" title="0">{
+                        continue</span>
+                }
+                <span class="cov8" title="1">if opts.Repository != "" &amp;&amp; sheet.Repository != opts.Repository </span><span class="cov0" title="0">{
+                        continue</span>
+                }
+                <span class="cov8" title="1">results = append(results, sheet)</span>
+        }
+
+        <span class="cov8" title="1">if opts.Limit &gt; 0 &amp;&amp; len(results) &gt; opts.Limit </span><span class="cov0" title="0">{
+                results = results[:opts.Limit]
+        }</span>
+
+        <span class="cov8" title="1">return results, nil</span>
+}
+
+func (m *MockClient) GetCheatSheet(id string) (*CheatSheet, error) <span class="cov8" title="1">{
+        m.mu.RLock()
+        defer m.mu.RUnlock()
+
+        for _, sheet := range m.cheatSheets </span><span class="cov8" title="1">{
+                if sheet.ID == id </span><span class="cov8" title="1">{
+                        return &amp;sheet, nil
+                }</span>
+        }
+        <span class="cov0" title="0">return nil, fmt.Errorf("cheat sheet not found")</span>
+}
+
+func (m *MockClient) DownloadCheatSheet(id string) (*apps.App, error) <span class="cov0" title="0">{
+        sheet, err := m.GetCheatSheet(id)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, err
+        }</span>
+        <span class="cov0" title="0">return &amp;sheet.App, nil</span>
+}
+
+func (m *MockClient) SubmitCheatSheet(sheet CheatSheet) error <span class="cov8" title="1">{
+        m.mu.Lock()
+        defer m.mu.Unlock()
+
+        sheet.ID = fmt.Sprintf("custom-%d", time.Now().Unix())
+        sheet.CreatedAt = time.Now()
+        sheet.UpdatedAt = time.Now()
+        m.cheatSheets = append(m.cheatSheets, sheet)
+        return nil
+}</span>
+
+func (m *MockClient) RateCheatSheet(id string, rating float64) error <span class="cov8" title="1">{
+        m.mu.Lock()
+        defer m.mu.Unlock()
+
+        for i, sheet := range m.cheatSheets </span><span class="cov8" title="1">{
+                if sheet.ID == id </span><span class="cov8" title="1">{
+                        m.cheatSheets[i].Rating = (sheet.Rating + rating) / 2
+                        return nil
+                }</span>
+        }
+        <span class="cov0" title="0">return fmt.Errorf("cheat sheet not found")</span>
+}
+</pre>
+		
+		<pre class="file" id="file8" style="display: none">package plugins
+
+import (
+        "context"
+        "encoding/json"
+        "fmt"
+        "os/exec"
+        "strings"
+)
+
+type ScriptPlugin struct {
+        metadata Metadata
+        path     string
+        config   map[string]interface{}
+}
+
+func NewScriptPlugin(metadata Metadata, path string) *ScriptPlugin <span class="cov8" title="1">{
+        return &amp;ScriptPlugin{
+                metadata: metadata,
+                path:     path,
+                config:   metadata.Config,
+        }
+}</span>
+
+func (s *ScriptPlugin) Name() string <span class="cov8" title="1">{
+        return s.metadata.Name
+}</span>
+
+func (s *ScriptPlugin) Version() string <span class="cov8" title="1">{
+        return s.metadata.Version
+}</span>
+
+func (s *ScriptPlugin) Author() string <span class="cov8" title="1">{
+        return s.metadata.Author
+}</span>
+
+func (s *ScriptPlugin) Description() string <span class="cov0" title="0">{
+        return s.metadata.Description
+}</span>
+
+func (s *ScriptPlugin) Init(config map[string]interface{}) error <span class="cov8" title="1">{
+        if config != nil </span><span class="cov8" title="1">{
+                for k, v := range config </span><span class="cov8" title="1">{
+                        s.config[k] = v
+                }</span>
+        }
+        <span class="cov8" title="1">return nil</span>
+}
+
+func (s *ScriptPlugin) Execute(ctx context.Context, args []string) error <span class="cov0" title="0">{
+        interpreter := s.config["interpreter"]
+        if interpreter == nil </span><span class="cov0" title="0">{
+                interpreter = "sh"
+        }</span>
+
+        <span class="cov0" title="0">cmd := exec.CommandContext(ctx, interpreter.(string), append([]string{s.path}, args...)...)
+        output, err := cmd.CombinedOutput()
+        if err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("script execution failed: %w\nOutput: %s", err, output)
+        }</span>
+
+        <span class="cov0" title="0">return nil</span>
+}
+
+func (s *ScriptPlugin) Cleanup() error <span class="cov8" title="1">{
+        return nil
+}</span>
+
+type JSONExportPlugin struct {
+        BasePlugin
+}
+
+type BasePlugin struct {
+        name        string
+        version     string
+        author      string
+        description string
+}
+
+func (b *BasePlugin) Name() string                                     <span class="cov0" title="0">{ return b.name }</span>
+func (b *BasePlugin) Version() string                                  <span class="cov0" title="0">{ return b.version }</span>
+func (b *BasePlugin) Author() string                                   <span class="cov0" title="0">{ return b.author }</span>
+func (b *BasePlugin) Description() string                              <span class="cov0" title="0">{ return b.description }</span>
+func (b *BasePlugin) Init(config map[string]interface{}) error         <span class="cov0" title="0">{ return nil }</span>
+func (b *BasePlugin) Execute(ctx context.Context, args []string) error <span class="cov0" title="0">{ return nil }</span>
+func (b *BasePlugin) Cleanup() error                                   <span class="cov0" title="0">{ return nil }</span>
+
+func NewJSONExportPlugin() *JSONExportPlugin <span class="cov0" title="0">{
+        return &amp;JSONExportPlugin{
+                BasePlugin: BasePlugin{
+                        name:        "json-export",
+                        version:     "1.0.0",
+                        author:      "cheat-go",
+                        description: "Export apps to JSON format",
+                },
+        }
+}</span>
+
+func (j *JSONExportPlugin) Export(data interface{}) ([]byte, error) <span class="cov0" title="0">{
+        return json.MarshalIndent(data, "", "  ")
+}</span>
+
+func (j *JSONExportPlugin) SupportedFormats() []string <span class="cov0" title="0">{
+        return []string{"json"}
+}</span>
+
+type MarkdownExportPlugin struct {
+        BasePlugin
+}
+
+func NewMarkdownExportPlugin() *MarkdownExportPlugin <span class="cov0" title="0">{
+        return &amp;MarkdownExportPlugin{
+                BasePlugin: BasePlugin{
+                        name:        "markdown-export",
+                        version:     "1.0.0",
+                        author:      "cheat-go",
+                        description: "Export apps to Markdown format",
+                },
+        }
+}</span>
+
+func (m *MarkdownExportPlugin) Export(apps interface{}) ([]byte, error) <span class="cov0" title="0">{
+        var sb strings.Builder
+        sb.WriteString("# Cheat Sheet\n\n")
+
+        return []byte(sb.String()), nil
+}</span>
+
+func (m *MarkdownExportPlugin) SupportedFormats() []string <span class="cov0" title="0">{
+        return []string{"md", "markdown"}
+}</span>
+</pre>
+		
+		<pre class="file" id="file9" style="display: none">package plugins
+
+import (
+        "encoding/json"
+        "errors"
+        "fmt"
+        "io"
+        "os"
+        "path/filepath"
+        "strings"
+
+        "gopkg.in/yaml.v3"
+)
+
+var (
+        ErrPluginNotFound          = errors.New("plugin not found")
+        ErrPluginAlreadyRegistered = errors.New("plugin already registered")
+        ErrInvalidPlugin           = errors.New("invalid plugin")
+        ErrPluginLoadFailed        = errors.New("plugin load failed")
+)
+
+type Loader struct {
+        registry      *Registry
+        pluginDirs    []string
+        loadedPlugins map[string]*LoadedPlugin
+}
+
+type LoadedPlugin struct {
+        Plugin   Plugin
+        Metadata *Metadata
+        Path     string
+}
+
+func NewLoader(dirs ...string) *Loader <span class="cov8" title="1">{
+        if len(dirs) == 0 </span><span class="cov8" title="1">{
+                dirs = getDefaultPluginDirs()
+        }</span>
+
+        <span class="cov8" title="1">return &amp;Loader{
+                registry:      NewRegistry(),
+                pluginDirs:    dirs,
+                loadedPlugins: make(map[string]*LoadedPlugin),
+        }</span>
+}
+
+func getDefaultPluginDirs() []string <span class="cov8" title="1">{
+        dirs := []string{}
+
+        homeDir, err := os.UserHomeDir()
+        if err == nil </span><span class="cov8" title="1">{
+                dirs = append(dirs, filepath.Join(homeDir, ".config", "cheat-go", "plugins"))
+        }</span>
+
+        <span class="cov8" title="1">dirs = append(dirs, "/usr/local/share/cheat-go/plugins")
+        dirs = append(dirs, "./plugins")
+
+        return dirs</span>
+}
+
+func (l *Loader) LoadAll() error <span class="cov0" title="0">{
+        for _, dir := range l.pluginDirs </span><span class="cov0" title="0">{
+                if err := l.LoadFromDirectory(dir); err != nil </span><span class="cov0" title="0">{
+                        continue</span>
+                }
+        }
+        <span class="cov0" title="0">return nil</span>
+}
+
+func (l *Loader) LoadFromDirectory(dir string) error <span class="cov8" title="1">{
+        if _, err := os.Stat(dir); os.IsNotExist(err) </span><span class="cov0" title="0">{
+                return fmt.Errorf("plugin directory does not exist: %s", dir)
+        }</span>
+
+        <span class="cov8" title="1">entries, err := os.ReadDir(dir)
+        if err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to read plugin directory: %w", err)
+        }</span>
+
+        <span class="cov8" title="1">for _, entry := range entries </span><span class="cov8" title="1">{
+                if entry.IsDir() </span><span class="cov0" title="0">{
+                        continue</span>
+                }
+
+                <span class="cov8" title="1">path := filepath.Join(dir, entry.Name())
+
+                if strings.HasSuffix(entry.Name(), ".so") </span><span class="cov0" title="0">{
+                        if err := l.LoadNativePlugin(path); err != nil </span><span class="cov0" title="0">{
+                                continue</span>
+                        }
+                } else<span class="cov8" title="1"> if strings.HasSuffix(entry.Name(), ".yaml") || strings.HasSuffix(entry.Name(), ".yml") </span><span class="cov8" title="1">{
+                        if err := l.LoadScriptPlugin(path); err != nil </span><span class="cov0" title="0">{
+                                continue</span>
+                        }
+                }
+        }
+
+        <span class="cov8" title="1">return nil</span>
+}
+
+func (l *Loader) LoadNativePlugin(path string) error <span class="cov0" title="0">{
+        // Native plugin loading is disabled for now due to Go plugin limitations
+        // We'll use script-based plugins instead
+        return fmt.Errorf("native plugin loading not yet implemented")
+}</span>
+
+func (l *Loader) LoadScriptPlugin(path string) error <span class="cov8" title="1">{
+        file, err := os.Open(path)
+        if err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to open plugin file %s: %w", path, err)
+        }</span>
+        <span class="cov8" title="1">defer file.Close()
+
+        data, err := io.ReadAll(file)
+        if err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to read plugin file %s: %w", path, err)
+        }</span>
+
+        <span class="cov8" title="1">var metadata Metadata
+        if err := yaml.Unmarshal(data, &amp;metadata); err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to parse plugin metadata %s: %w", path, err)
+        }</span>
+
+        <span class="cov8" title="1">scriptPlugin := NewScriptPlugin(metadata, path)
+
+        l.loadedPlugins[metadata.Name] = &amp;LoadedPlugin{
+                Plugin:   scriptPlugin,
+                Metadata: &amp;metadata,
+                Path:     path,
+        }
+
+        return l.registry.Register(metadata.Name, scriptPlugin)</span>
+}
+
+func (l *Loader) GetPlugin(name string) (Plugin, error) <span class="cov8" title="1">{
+        return l.registry.Get(name)
+}</span>
+
+func (l *Loader) ListPlugins() []*LoadedPlugin <span class="cov8" title="1">{
+        plugins := make([]*LoadedPlugin, 0, len(l.loadedPlugins))
+        for _, p := range l.loadedPlugins </span><span class="cov8" title="1">{
+                plugins = append(plugins, p)
+        }</span>
+        <span class="cov8" title="1">return plugins</span>
+}
+
+func (l *Loader) UnloadPlugin(name string) error <span class="cov8" title="1">{
+        if loaded, exists := l.loadedPlugins[name]; exists </span><span class="cov8" title="1">{
+                if err := loaded.Plugin.Cleanup(); err != nil </span><span class="cov0" title="0">{
+                        return fmt.Errorf("failed to cleanup plugin %s: %w", name, err)
+                }</span>
+                <span class="cov8" title="1">delete(l.loadedPlugins, name)</span>
+        }
+
+        <span class="cov8" title="1">return l.registry.Unregister(name)</span>
+}
+
+func (l *Loader) ExportPluginInfo(w io.Writer) error <span class="cov8" title="1">{
+        info := make(map[string]*Metadata)
+        for name, loaded := range l.loadedPlugins </span><span class="cov8" title="1">{
+                info[name] = loaded.Metadata
+        }</span>
+
+        <span class="cov8" title="1">encoder := json.NewEncoder(w)
+        encoder.SetIndent("", "  ")
+        return encoder.Encode(info)</span>
+}
+</pre>
+		
+		<pre class="file" id="file10" style="display: none">package plugins
+
+import (
+        "cheat-go/pkg/apps"
+        "context"
+)
+
+type Plugin interface {
+        Name() string
+        Version() string
+        Author() string
+        Description() string
+        Init(config map[string]interface{}) error
+        Execute(ctx context.Context, args []string) error
+        Cleanup() error
+}
+
+type AppProviderPlugin interface {
+        Plugin
+        GetApps() ([]apps.App, error)
+        LoadApp(name string) (*apps.App, error)
+}
+
+type TransformPlugin interface {
+        Plugin
+        Transform(app *apps.App) (*apps.App, error)
+}
+
+type ExportPlugin interface {
+        Plugin
+        Export(apps []apps.App, format string) ([]byte, error)
+        SupportedFormats() []string
+}
+
+type ImportPlugin interface {
+        Plugin
+        Import(data []byte, format string) ([]apps.App, error)
+        SupportedFormats() []string
+}
+
+type Metadata struct {
+        Name        string                 `json:"name" yaml:"name"`
+        Version     string                 `json:"version" yaml:"version"`
+        Author      string                 `json:"author" yaml:"author"`
+        Description string                 `json:"description" yaml:"description"`
+        Type        string                 `json:"type" yaml:"type"`
+        Config      map[string]interface{} `json:"config" yaml:"config"`
+}
+
+type Registry struct {
+        plugins map[string]Plugin
+}
+
+func NewRegistry() *Registry <span class="cov8" title="1">{
+        return &amp;Registry{
+                plugins: make(map[string]Plugin),
+        }
+}</span>
+
+func (r *Registry) Register(name string, plugin Plugin) error <span class="cov8" title="1">{
+        if _, exists := r.plugins[name]; exists </span><span class="cov8" title="1">{
+                return ErrPluginAlreadyRegistered
+        }</span>
+        <span class="cov8" title="1">r.plugins[name] = plugin
+        return nil</span>
+}
+
+func (r *Registry) Get(name string) (Plugin, error) <span class="cov8" title="1">{
+        plugin, exists := r.plugins[name]
+        if !exists </span><span class="cov8" title="1">{
+                return nil, ErrPluginNotFound
+        }</span>
+        <span class="cov8" title="1">return plugin, nil</span>
+}
+
+func (r *Registry) List() []string <span class="cov8" title="1">{
+        names := make([]string, 0, len(r.plugins))
+        for name := range r.plugins </span><span class="cov8" title="1">{
+                names = append(names, name)
+        }</span>
+        <span class="cov8" title="1">return names</span>
+}
+
+func (r *Registry) Unregister(name string) error <span class="cov8" title="1">{
+        if _, exists := r.plugins[name]; !exists </span><span class="cov8" title="1">{
+                return ErrPluginNotFound
+        }</span>
+        <span class="cov8" title="1">delete(r.plugins, name)
+        return nil</span>
+}
+</pre>
+		
+		<pre class="file" id="file11" style="display: none">package sync
+
+import (
+        "bytes"
+        "cheat-go/pkg/apps"
+        "cheat-go/pkg/notes"
+        "cheat-go/pkg/online"
+        "crypto/sha256"
+        "encoding/hex"
+        "encoding/json"
+        "errors"
+        "fmt"
+        "io"
+        "net/http"
+        "os"
+        "path/filepath"
+        "sync"
+        "time"
+)
+
+var (
+        ErrSyncInProgress = errors.New("sync already in progress")
+        ErrSyncFailed     = errors.New("sync failed")
+        ErrNoSyncService  = errors.New("no sync service configured")
+)
+
+type SyncService interface {
+        Push(data SyncData) error
+        Pull() (*SyncData, error)
+        GetLastSync() (time.Time, error)
+        ResolveConflict(item SyncItem, resolution ConflictResolution) error
+}
+
+type SyncData struct {
+        Version     string              `json:"version"`
+        Timestamp   time.Time           `json:"timestamp"`
+        DeviceID    string              `json:"device_id"`
+        Apps        []apps.App          `json:"apps,omitempty"`
+        Notes       []*notes.Note       `json:"notes,omitempty"`
+        CheatSheets []online.CheatSheet `json:"cheat_sheets,omitempty"`
+        Checksum    string              `json:"checksum"`
+}
+
+type SyncItem struct {
+        Type      string      `json:"type"`
+        ID        string      `json:"id"`
+        Local     interface{} `json:"local"`
+        Remote    interface{} `json:"remote"`
+        Timestamp time.Time   `json:"timestamp"`
+}
+
+type ConflictResolution int
+
+const (
+        KeepLocal ConflictResolution = iota
+        KeepRemote
+        Merge
+        Skip
+)
+
+type Manager struct {
+        service      SyncService
+        localDataDir string
+        deviceID     string
+        syncInterval time.Duration
+        mu           sync.RWMutex
+        isSyncing    bool
+        lastSync     time.Time
+        conflicts    []SyncItem
+        stopChan     chan struct{}
+}
+
+func NewManager(service SyncService, localDataDir string) (*Manager, error) <span class="cov8" title="1">{
+        deviceID, err := getOrCreateDeviceID(localDataDir)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("failed to get device ID: %w", err)
+        }</span>
+
+        <span class="cov8" title="1">return &amp;Manager{
+                service:      service,
+                localDataDir: localDataDir,
+                deviceID:     deviceID,
+                syncInterval: 15 * time.Minute,
+                stopChan:     make(chan struct{}),
+        }, nil</span>
+}
+
+func (m *Manager) StartAutoSync() error <span class="cov8" title="1">{
+        go func() </span><span class="cov8" title="1">{
+                ticker := time.NewTicker(m.syncInterval)
+                defer ticker.Stop()
+
+                for </span><span class="cov8" title="1">{
+                        select </span>{
+                        case &lt;-ticker.C:<span class="cov8" title="1">
+                                if err := m.Sync(); err != nil </span><span class="cov0" title="0">{
+                                        fmt.Printf("Auto-sync failed: %v\n", err)
+                                }</span>
+                        case &lt;-m.stopChan:<span class="cov8" title="1">
+                                return</span>
+                        }
+                }
+        }()
+
+        <span class="cov8" title="1">return nil</span>
+}
+
+func (m *Manager) StopAutoSync() <span class="cov8" title="1">{
+        close(m.stopChan)
+}</span>
+
+func (m *Manager) Sync() error <span class="cov8" title="1">{
+        m.mu.Lock()
+        if m.isSyncing </span><span class="cov0" title="0">{
+                m.mu.Unlock()
+                return ErrSyncInProgress
+        }</span>
+        <span class="cov8" title="1">m.isSyncing = true
+        m.mu.Unlock()
+
+        defer func() </span><span class="cov8" title="1">{
+                m.mu.Lock()
+                m.isSyncing = false
+                m.mu.Unlock()
+        }</span>()
+
+        <span class="cov8" title="1">localData, err := m.gatherLocalData()
+        if err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to gather local data: %w", err)
+        }</span>
+
+        <span class="cov8" title="1">remoteData, err := m.service.Pull()
+        if err != nil </span><span class="cov8" title="1">{
+                return fmt.Errorf("failed to pull remote data: %w", err)
+        }</span>
+
+        <span class="cov8" title="1">conflicts := m.detectConflicts(localData, remoteData)
+        if len(conflicts) &gt; 0 </span><span class="cov0" title="0">{
+                m.mu.Lock()
+                m.conflicts = conflicts
+                m.mu.Unlock()
+
+                if err := m.autoResolveConflicts(conflicts); err != nil </span><span class="cov0" title="0">{
+                        return fmt.Errorf("failed to resolve conflicts: %w", err)
+                }</span>
+        }
+
+        <span class="cov8" title="1">mergedData := m.mergeData(localData, remoteData)
+
+        if err := m.service.Push(*mergedData); err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to push data: %w", err)
+        }</span>
+
+        <span class="cov8" title="1">if err := m.saveLocalData(mergedData); err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to save local data: %w", err)
+        }</span>
+
+        <span class="cov8" title="1">m.mu.Lock()
+        m.lastSync = time.Now()
+        m.conflicts = nil
+        m.mu.Unlock()
+
+        return nil</span>
+}
+
+func (m *Manager) GetSyncStatus() SyncStatus <span class="cov8" title="1">{
+        m.mu.RLock()
+        defer m.mu.RUnlock()
+
+        return SyncStatus{
+                LastSync:     m.lastSync,
+                IsSyncing:    m.isSyncing,
+                HasConflicts: len(m.conflicts) &gt; 0,
+                Conflicts:    m.conflicts,
+                DeviceID:     m.deviceID,
+        }
+}</span>
+
+func (m *Manager) ResolveConflict(itemID string, resolution ConflictResolution) error <span class="cov8" title="1">{
+        m.mu.Lock()
+        defer m.mu.Unlock()
+
+        for i, conflict := range m.conflicts </span><span class="cov8" title="1">{
+                if conflict.ID == itemID </span><span class="cov0" title="0">{
+                        if err := m.service.ResolveConflict(conflict, resolution); err != nil </span><span class="cov0" title="0">{
+                                return err
+                        }</span>
+
+                        <span class="cov0" title="0">m.conflicts = append(m.conflicts[:i], m.conflicts[i+1:]...)
+                        return nil</span>
+                }
+        }
+
+        <span class="cov8" title="1">return fmt.Errorf("conflict not found: %s", itemID)</span>
+}
+
+func (m *Manager) gatherLocalData() (*SyncData, error) <span class="cov8" title="1">{
+        data := &amp;SyncData{
+                Version:   "1.0",
+                Timestamp: time.Now(),
+                DeviceID:  m.deviceID,
+        }
+
+        appsFile := filepath.Join(m.localDataDir, "apps.json")
+        if _, err := os.Stat(appsFile); err == nil </span><span class="cov0" title="0">{
+                appsData, err := os.ReadFile(appsFile)
+                if err == nil </span><span class="cov0" title="0">{
+                        json.Unmarshal(appsData, &amp;data.Apps)
+                }</span>
+        }
+
+        <span class="cov8" title="1">notesFile := filepath.Join(m.localDataDir, "notes.json")
+        if _, err := os.Stat(notesFile); err == nil </span><span class="cov0" title="0">{
+                notesData, err := os.ReadFile(notesFile)
+                if err == nil </span><span class="cov0" title="0">{
+                        json.Unmarshal(notesData, &amp;data.Notes)
+                }</span>
+        }
+
+        <span class="cov8" title="1">data.Checksum = m.calculateChecksum(data)
+
+        return data, nil</span>
+}
+
+func (m *Manager) saveLocalData(data *SyncData) error <span class="cov8" title="1">{
+        if len(data.Apps) &gt; 0 </span><span class="cov0" title="0">{
+                appsFile := filepath.Join(m.localDataDir, "apps.json")
+                appsData, _ := json.MarshalIndent(data.Apps, "", "  ")
+                if err := os.WriteFile(appsFile, appsData, 0644); err != nil </span><span class="cov0" title="0">{
+                        return err
+                }</span>
+        }
+
+        <span class="cov8" title="1">if len(data.Notes) &gt; 0 </span><span class="cov0" title="0">{
+                notesFile := filepath.Join(m.localDataDir, "notes.json")
+                notesData, _ := json.MarshalIndent(data.Notes, "", "  ")
+                if err := os.WriteFile(notesFile, notesData, 0644); err != nil </span><span class="cov0" title="0">{
+                        return err
+                }</span>
+        }
+
+        <span class="cov8" title="1">return nil</span>
+}
+
+func (m *Manager) detectConflicts(local, remote *SyncData) []SyncItem <span class="cov8" title="1">{
+        conflicts := []SyncItem{}
+
+        if local == nil || remote == nil </span><span class="cov0" title="0">{
+                return conflicts
+        }</span>
+
+        // Check for conflicting notes
+        <span class="cov8" title="1">remoteNotesMap := make(map[string]*notes.Note)
+        for _, note := range remote.Notes </span><span class="cov0" title="0">{
+                remoteNotesMap[note.ID] = note
+        }</span>
+
+        <span class="cov8" title="1">for _, localNote := range local.Notes </span><span class="cov0" title="0">{
+                if remoteNote, exists := remoteNotesMap[localNote.ID]; exists </span><span class="cov0" title="0">{
+                        if localNote.UpdatedAt != remoteNote.UpdatedAt </span><span class="cov0" title="0">{
+                                conflicts = append(conflicts, SyncItem{
+                                        Type:      "note",
+                                        ID:        localNote.ID,
+                                        Local:     localNote,
+                                        Remote:    remoteNote,
+                                        Timestamp: time.Now(),
+                                })
+                        }</span>
+                }
+        }
+
+        <span class="cov8" title="1">return conflicts</span>
+}
+
+func (m *Manager) mergeData(local, remote *SyncData) *SyncData <span class="cov8" title="1">{
+        merged := &amp;SyncData{
+                Version:   "1.0",
+                Timestamp: time.Now(),
+                DeviceID:  m.deviceID,
+        }
+
+        if local != nil </span><span class="cov8" title="1">{
+                merged.Apps = local.Apps
+                merged.Notes = local.Notes
+                merged.CheatSheets = local.CheatSheets
+        }</span>
+
+        <span class="cov8" title="1">if remote != nil &amp;&amp; remote.Timestamp.After(local.Timestamp) </span><span class="cov8" title="1">{
+                merged.Apps = remote.Apps
+                merged.Notes = remote.Notes
+                merged.CheatSheets = remote.CheatSheets
+        }</span>
+
+        <span class="cov8" title="1">merged.Checksum = m.calculateChecksum(merged)
+
+        return merged</span>
+}
+
+func (m *Manager) autoResolveConflicts(conflicts []SyncItem) error <span class="cov0" title="0">{
+        for _, conflict := range conflicts </span><span class="cov0" title="0">{
+                resolution := m.determineResolution(conflict)
+                if err := m.service.ResolveConflict(conflict, resolution); err != nil </span><span class="cov0" title="0">{
+                        return err
+                }</span>
+        }
+        <span class="cov0" title="0">return nil</span>
+}
+
+func (m *Manager) determineResolution(conflict SyncItem) ConflictResolution <span class="cov0" title="0">{
+        switch conflict.Type </span>{
+        case "note":<span class="cov0" title="0">
+                localNote := conflict.Local.(*notes.Note)
+                remoteNote := conflict.Remote.(*notes.Note)
+
+                if localNote.UpdatedAt.After(remoteNote.UpdatedAt) </span><span class="cov0" title="0">{
+                        return KeepLocal
+                }</span>
+                <span class="cov0" title="0">return KeepRemote</span>
+
+        default:<span class="cov0" title="0">
+                return KeepLocal</span>
+        }
+}
+
+func (m *Manager) calculateChecksum(data *SyncData) string <span class="cov8" title="1">{
+        jsonData, _ := json.Marshal(data)
+        hash := sha256.Sum256(jsonData)
+        return hex.EncodeToString(hash[:])
+}</span>
+
+func getOrCreateDeviceID(dataDir string) (string, error) <span class="cov8" title="1">{
+        deviceFile := filepath.Join(dataDir, ".device_id")
+
+        if data, err := os.ReadFile(deviceFile); err == nil </span><span class="cov8" title="1">{
+                return string(data), nil
+        }</span>
+
+        <span class="cov8" title="1">deviceID := generateDeviceID()
+
+        if err := os.MkdirAll(dataDir, 0755); err != nil </span><span class="cov0" title="0">{
+                return "", err
+        }</span>
+
+        <span class="cov8" title="1">if err := os.WriteFile(deviceFile, []byte(deviceID), 0644); err != nil </span><span class="cov0" title="0">{
+                return "", err
+        }</span>
+
+        <span class="cov8" title="1">return deviceID, nil</span>
+}
+
+func generateDeviceID() string <span class="cov8" title="1">{
+        hostname, _ := os.Hostname()
+        timestamp := time.Now().Unix()
+        data := fmt.Sprintf("%s-%d", hostname, timestamp)
+        hash := sha256.Sum256([]byte(data))
+        return hex.EncodeToString(hash[:16])
+}</span>
+
+type SyncStatus struct {
+        LastSync     time.Time  `json:"last_sync"`
+        IsSyncing    bool       `json:"is_syncing"`
+        HasConflicts bool       `json:"has_conflicts"`
+        Conflicts    []SyncItem `json:"conflicts,omitempty"`
+        DeviceID     string     `json:"device_id"`
+}
+
+// CloudSyncService implements sync with a cloud backend
+type CloudSyncService struct {
+        endpoint string
+        apiKey   string
+        client   *http.Client
+}
+
+func NewCloudSyncService(endpoint, apiKey string) *CloudSyncService <span class="cov8" title="1">{
+        return &amp;CloudSyncService{
+                endpoint: endpoint,
+                apiKey:   apiKey,
+                client: &amp;http.Client{
+                        Timeout: 30 * time.Second,
+                },
+        }
+}</span>
+
+func (c *CloudSyncService) Push(data SyncData) error <span class="cov0" title="0">{
+        jsonData, err := json.Marshal(data)
+        if err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+
+        <span class="cov0" title="0">req, err := http.NewRequest("POST", c.endpoint+"/push", bytes.NewReader(jsonData))
+        if err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+
+        <span class="cov0" title="0">req.Header.Set("Content-Type", "application/json")
+        req.Header.Set("Authorization", "Bearer "+c.apiKey)
+
+        resp, err := c.client.Do(req)
+        if err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+        <span class="cov0" title="0">defer resp.Body.Close()
+
+        if resp.StatusCode != http.StatusOK </span><span class="cov0" title="0">{
+                body, _ := io.ReadAll(resp.Body)
+                return fmt.Errorf("push failed: %s", body)
+        }</span>
+
+        <span class="cov0" title="0">return nil</span>
+}
+
+func (c *CloudSyncService) Pull() (*SyncData, error) <span class="cov0" title="0">{
+        req, err := http.NewRequest("GET", c.endpoint+"/pull", nil)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, err
+        }</span>
+
+        <span class="cov0" title="0">req.Header.Set("Authorization", "Bearer "+c.apiKey)
+
+        resp, err := c.client.Do(req)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, err
+        }</span>
+        <span class="cov0" title="0">defer resp.Body.Close()
+
+        if resp.StatusCode == http.StatusNotFound </span><span class="cov0" title="0">{
+                return &amp;SyncData{}, nil
+        }</span>
+
+        <span class="cov0" title="0">if resp.StatusCode != http.StatusOK </span><span class="cov0" title="0">{
+                body, _ := io.ReadAll(resp.Body)
+                return nil, fmt.Errorf("pull failed: %s", body)
+        }</span>
+
+        <span class="cov0" title="0">var data SyncData
+        if err := json.NewDecoder(resp.Body).Decode(&amp;data); err != nil </span><span class="cov0" title="0">{
+                return nil, err
+        }</span>
+
+        <span class="cov0" title="0">return &amp;data, nil</span>
+}
+
+func (c *CloudSyncService) GetLastSync() (time.Time, error) <span class="cov0" title="0">{
+        req, err := http.NewRequest("GET", c.endpoint+"/last-sync", nil)
+        if err != nil </span><span class="cov0" title="0">{
+                return time.Time{}, err
+        }</span>
+
+        <span class="cov0" title="0">req.Header.Set("Authorization", "Bearer "+c.apiKey)
+
+        resp, err := c.client.Do(req)
+        if err != nil </span><span class="cov0" title="0">{
+                return time.Time{}, err
+        }</span>
+        <span class="cov0" title="0">defer resp.Body.Close()
+
+        var result struct {
+                LastSync time.Time `json:"last_sync"`
+        }
+
+        if err := json.NewDecoder(resp.Body).Decode(&amp;result); err != nil </span><span class="cov0" title="0">{
+                return time.Time{}, err
+        }</span>
+
+        <span class="cov0" title="0">return result.LastSync, nil</span>
+}
+
+func (c *CloudSyncService) ResolveConflict(item SyncItem, resolution ConflictResolution) error <span class="cov0" title="0">{
+        data := map[string]interface{}{
+                "item":       item,
+                "resolution": resolution,
+        }
+
+        jsonData, err := json.Marshal(data)
+        if err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+
+        <span class="cov0" title="0">req, err := http.NewRequest("POST", c.endpoint+"/resolve", bytes.NewReader(jsonData))
+        if err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+
+        <span class="cov0" title="0">req.Header.Set("Content-Type", "application/json")
+        req.Header.Set("Authorization", "Bearer "+c.apiKey)
+
+        resp, err := c.client.Do(req)
+        if err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+        <span class="cov0" title="0">defer resp.Body.Close()
+
+        if resp.StatusCode != http.StatusOK </span><span class="cov0" title="0">{
+                body, _ := io.ReadAll(resp.Body)
+                return fmt.Errorf("conflict resolution failed: %s", body)
+        }</span>
+
+        <span class="cov0" title="0">return nil</span>
+}
+</pre>
+		
+		<pre class="file" id="file12" style="display: none">package ui
 
 import (
         "strings"
@@ -643,13 +4255,17 @@ import (
 
 // TableRenderer handles the rendering of tabular data
 type TableRenderer struct {
-        theme *Theme
+        theme      *Theme
+        tableStyle string
+        maxWidth   int
 }
 
 // NewTableRenderer creates a new table renderer with the given theme
 func NewTableRenderer(theme *Theme) *TableRenderer <span class="cov8" title="1">{
         return &amp;TableRenderer{
-                theme: theme,
+                theme:      theme,
+                tableStyle: theme.TableStyle,
+                maxWidth:   120, // default max width
         }
 }</span>
 
@@ -708,6 +4324,117 @@ func (r *TableRenderer) Render(rows [][]string, cursorX, cursorY int) string <sp
         <span class="cov8" title="1">return b.String()</span>
 }
 
+// GetTheme returns the current theme
+func (r *TableRenderer) GetTheme() *Theme <span class="cov8" title="1">{
+        return r.theme
+}</span>
+
+// SetTableStyle sets the table style
+func (r *TableRenderer) SetTableStyle(style string) <span class="cov0" title="0">{
+        r.tableStyle = style
+}</span>
+
+// SetMaxWidth sets the maximum table width
+func (r *TableRenderer) SetMaxWidth(width int) <span class="cov0" title="0">{
+        r.maxWidth = width
+}</span>
+
+// highlightSearchTerm highlights search terms in the given text
+func (r *TableRenderer) highlightSearchTerm(text, searchTerm string) string <span class="cov8" title="1">{
+        if searchTerm == "" </span><span class="cov8" title="1">{
+                return text
+        }</span>
+
+        // Case-insensitive highlighting
+        <span class="cov8" title="1">lowerText := strings.ToLower(text)
+        lowerTerm := strings.ToLower(searchTerm)
+
+        if !strings.Contains(lowerText, lowerTerm) </span><span class="cov8" title="1">{
+                return text
+        }</span>
+
+        // Find the position of the match
+        <span class="cov8" title="1">index := strings.Index(lowerText, lowerTerm)
+        if index == -1 </span><span class="cov0" title="0">{
+                return text
+        }</span>
+
+        // Extract the actual case-preserved match
+        <span class="cov8" title="1">beforeMatch := text[:index]
+        actualMatch := text[index : index+len(searchTerm)]
+        afterMatch := text[index+len(searchTerm):]
+
+        // Apply highlighting style
+        highlightedMatch := r.theme.HighlightStyle.Render(actualMatch)
+
+        // Recursively highlight remaining occurrences
+        highlightedAfter := r.highlightSearchTerm(afterMatch, searchTerm)
+
+        return beforeMatch + highlightedMatch + highlightedAfter</span>
+}
+
+// RenderWithHighlighting renders the table with search term highlighting
+func (r *TableRenderer) RenderWithHighlighting(rows [][]string, cursorX, cursorY int, searchTerm string) string <span class="cov8" title="1">{
+        if len(rows) == 0 </span><span class="cov0" title="0">{
+                return ""
+        }</span>
+
+        <span class="cov8" title="1">var b strings.Builder
+
+        // Determine column widths using runewidth (without highlight markup)
+        colWidths := make([]int, len(rows[0]))
+        for _, row := range rows </span><span class="cov8" title="1">{
+                for i, cell := range row </span><span class="cov8" title="1">{
+                        if w := runewidth.StringWidth(cell); w &gt; colWidths[i] </span><span class="cov8" title="1">{
+                                colWidths[i] = w
+                        }</span>
+                }
+        }
+
+        // Render rows with highlighting
+        <span class="cov8" title="1">for y, row := range rows </span><span class="cov8" title="1">{
+                for x, cell := range row </span><span class="cov8" title="1">{
+                        cellWidth := runewidth.StringWidth(cell)
+                        pad := colWidths[x] - cellWidth
+
+                        // Apply highlighting if not header row and search term exists
+                        content := cell
+                        if y &gt; 0 &amp;&amp; searchTerm != "" </span><span class="cov8" title="1">{
+                                content = r.highlightSearchTerm(cell, searchTerm)
+                        }</span>
+
+                        <span class="cov8" title="1">contentWithPadding := " " + content + strings.Repeat(" ", pad) + " "
+
+                        style := r.theme.CellStyle
+                        if y == 0 </span><span class="cov8" title="1">{
+                                style = r.theme.HeaderStyle
+                        }</span>
+                        <span class="cov8" title="1">if x == cursorX &amp;&amp; y == cursorY </span><span class="cov8" title="1">{
+                                style = style.Copy().Inherit(r.theme.SelectedRowStyle)
+                        }</span>
+
+                        <span class="cov8" title="1">b.WriteString(style.Render(contentWithPadding))
+                        if x &lt; len(row)-1 </span><span class="cov8" title="1">{
+                                b.WriteString("│")
+                        }</span>
+                }
+                <span class="cov8" title="1">b.WriteString("\n")
+
+                // Add separator after header
+                if y == 0 </span><span class="cov8" title="1">{
+                        for i, w := range colWidths </span><span class="cov8" title="1">{
+                                b.WriteString(strings.Repeat("─", w+2))
+                                if i &lt; len(colWidths)-1 </span><span class="cov8" title="1">{
+                                        b.WriteString("┼")
+                                }</span>
+                        }
+                        <span class="cov8" title="1">b.WriteString("\n")</span>
+                }
+        }
+
+        <span class="cov8" title="1">return b.String()</span>
+}
+
 // RenderWithInstructions renders the table with usage instructions
 func (r *TableRenderer) RenderWithInstructions(rows [][]string, cursorX, cursorY int) string <span class="cov8" title="1">{
         table := r.Render(rows, cursorX, cursorY)
@@ -715,32 +4442,85 @@ func (r *TableRenderer) RenderWithInstructions(rows [][]string, cursorX, cursorY
 }</span>
 </pre>
 		
-		<pre class="file" id="file6" style="display: none">package ui
+		<pre class="file" id="file13" style="display: none">package ui
 
 import "github.com/charmbracelet/lipgloss"
 
 // Theme defines the visual styling for the application
 type Theme struct {
-        HeaderStyle lipgloss.Style
-        CellStyle   lipgloss.Style
-        BorderColor lipgloss.Color
+        Name             string
+        HeaderStyle      lipgloss.Style
+        CellStyle        lipgloss.Style
+        HighlightStyle   lipgloss.Style
+        BorderColor      lipgloss.Color
+        SelectedRowStyle lipgloss.Style
+        CategoryStyle    lipgloss.Style
+        SearchStyle      lipgloss.Style
+        SearchInputStyle lipgloss.Style
+        TableStyle       string
 }
 
 // DefaultTheme returns the default theme
 func DefaultTheme() *Theme <span class="cov8" title="1">{
         return &amp;Theme{
-                HeaderStyle: lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("205")),
-                CellStyle:   lipgloss.NewStyle().Padding(0, 0),
-                BorderColor: lipgloss.Color("240"),
+                Name:             "default",
+                HeaderStyle:      lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("205")),
+                CellStyle:        lipgloss.NewStyle(),
+                HighlightStyle:   lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("220")),
+                BorderColor:      lipgloss.Color("240"),
+                SelectedRowStyle: lipgloss.NewStyle().Background(lipgloss.Color("238")),
+                CategoryStyle:    lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("39")),
+                SearchStyle:      lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("220")),
+                SearchInputStyle: lipgloss.NewStyle().Background(lipgloss.Color("235")),
+                TableStyle:       "simple",
         }
 }</span>
 
 // DarkTheme returns a dark theme variant
 func DarkTheme() *Theme <span class="cov8" title="1">{
         return &amp;Theme{
-                HeaderStyle: lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("39")),
-                CellStyle:   lipgloss.NewStyle().Padding(0, 0),
-                BorderColor: lipgloss.Color("238"),
+                Name:             "dark",
+                HeaderStyle:      lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("39")),
+                CellStyle:        lipgloss.NewStyle().Foreground(lipgloss.Color("252")),
+                HighlightStyle:   lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("226")),
+                BorderColor:      lipgloss.Color("238"),
+                SelectedRowStyle: lipgloss.NewStyle().Background(lipgloss.Color("236")),
+                CategoryStyle:    lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("82")),
+                SearchStyle:      lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("226")),
+                SearchInputStyle: lipgloss.NewStyle().Background(lipgloss.Color("234")),
+                TableStyle:       "rounded",
+        }
+}</span>
+
+// LightTheme returns a light theme variant
+func LightTheme() *Theme <span class="cov0" title="0">{
+        return &amp;Theme{
+                Name:             "light",
+                HeaderStyle:      lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("25")),
+                CellStyle:        lipgloss.NewStyle().Foreground(lipgloss.Color("235")),
+                HighlightStyle:   lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("196")),
+                BorderColor:      lipgloss.Color("244"),
+                SelectedRowStyle: lipgloss.NewStyle().Background(lipgloss.Color("254")),
+                CategoryStyle:    lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("28")),
+                SearchStyle:      lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("196")),
+                SearchInputStyle: lipgloss.NewStyle().Background(lipgloss.Color("255")),
+                TableStyle:       "simple",
+        }
+}</span>
+
+// MinimalTheme returns a minimal theme variant
+func MinimalTheme() *Theme <span class="cov0" title="0">{
+        return &amp;Theme{
+                Name:             "minimal",
+                HeaderStyle:      lipgloss.NewStyle().Bold(true),
+                CellStyle:        lipgloss.NewStyle(),
+                HighlightStyle:   lipgloss.NewStyle().Bold(true),
+                BorderColor:      lipgloss.Color("250"),
+                SelectedRowStyle: lipgloss.NewStyle().Underline(true),
+                CategoryStyle:    lipgloss.NewStyle().Bold(true),
+                SearchStyle:      lipgloss.NewStyle().Bold(true),
+                SearchInputStyle: lipgloss.NewStyle().Underline(true),
+                TableStyle:       "minimal",
         }
 }</span>
 
@@ -749,10 +4529,19 @@ func GetTheme(name string) *Theme <span class="cov8" title="1">{
         switch name </span>{
         case "dark":<span class="cov8" title="1">
                 return DarkTheme()</span>
+        case "light":<span class="cov0" title="0">
+                return LightTheme()</span>
+        case "minimal":<span class="cov0" title="0">
+                return MinimalTheme()</span>
         default:<span class="cov8" title="1">
                 return DefaultTheme()</span>
         }
 }
+
+// GetAvailableThemes returns a list of all available theme names
+func GetAvailableThemes() []string <span class="cov0" title="0">{
+        return []string{"default", "dark", "light", "minimal"}
+}</span>
 </pre>
 		
 		</div>

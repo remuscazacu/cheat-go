@@ -1,0 +1,28 @@
+[
+  {
+    "id": "note-1755295548421385496",
+    "title": "New Note 1755295548",
+    "content": "Enter your note content here\nTHis is my first note\n",
+    "app_name": "",
+    "category": "general",
+    "tags": [
+      "new"
+    ],
+    "created_at": "2025-08-16T01:05:48.421386229+03:00",
+    "updated_at": "2025-08-16T01:14:11.17294762+03:00",
+    "is_favorite": false
+  },
+  {
+    "id": "note-1755293488208394184",
+    "title": "New Note 1755293488",
+    "content": "Enter your note content here\n[Edited at 00:31:34]\n[Edited at 00:31:37]\n[Edited at 01:01:01]\n[Edited at 01:01:02]",
+    "app_name": "",
+    "category": "general",
+    "tags": [
+      "new"
+    ],
+    "created_at": "2025-08-16T00:31:28.208395287+03:00",
+    "updated_at": "2025-08-16T01:01:05.465904032+03:00",
+    "is_favorite": false
+  }
+]

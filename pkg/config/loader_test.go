@@ -346,3 +346,151 @@ func TestLoader_Load_DefaultPaths(t *testing.T) {
 		t.Error("should load config from default path")
 	}
 }
+
+func TestLoader_SaveWithPath(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "save_test.yaml")
+
+	loader := NewLoader("")
+
+	testConfig := &Config{
+		Apps:  []string{"save-test"},
+		Theme: "light",
+		Layout: LayoutConfig{
+			Columns:        []string{"shortcut"},
+			ShowCategories: true,
+			TableStyle:     "rounded",
+			MaxWidth:       100,
+		},
+		DataDir: "/save/test",
+	}
+
+	err := loader.Save(testConfig, configPath)
+	if err != nil {
+		t.Fatalf("Save() error = %v", err)
+	}
+
+	// Verify file exists
+	if _, err := os.Stat(configPath); os.IsNotExist(err) {
+		t.Error("Config file should be created")
+	}
+
+	// Load and verify content
+	loader2 := NewLoader(configPath)
+	loadedConfig, err := loader2.Load()
+	if err != nil {
+		t.Fatalf("Load after Save error = %v", err)
+	}
+
+	if loadedConfig.Theme != "light" {
+		t.Errorf("Theme = %s, expected 'light'", loadedConfig.Theme)
+	}
+}
+
+func TestLoader_SaveInvalidPath(t *testing.T) {
+	loader := NewLoader("")
+	testConfig := DefaultConfig()
+
+	err := loader.Save(testConfig, "/invalid/path/that/cannot/be/created/config.yaml")
+	if err == nil {
+		t.Error("Expected error when saving to invalid path")
+	}
+}
+
+func TestConfig_ValidateResults(t *testing.T) {
+	// Test valid config with all required keybinds
+	validConfig := &Config{
+		Apps:  []string{"vim", "zsh"},
+		Theme: "default",
+		Layout: LayoutConfig{
+			Columns:        []string{"shortcut", "description"},
+			ShowCategories: false,
+			TableStyle:     "simple",
+			MaxWidth:       120,
+		},
+		Keybinds: map[string]string{
+			"quit":     "q",
+			"up":       "k",
+			"down":     "j",
+			"left":     "h",
+			"right":    "l",
+			"search":   "/",
+			"next_app": "tab",
+			"prev_app": "shift+tab",
+		},
+		DataDir: "/valid/path",
+	}
+
+	result := validConfig.Validate()
+	if !result.Valid {
+		t.Errorf("Valid config should pass validation: %v", result.Errors)
+	}
+
+	// Test config with invalid theme
+	invalidThemeConfig := &Config{
+		Theme: "invalid-theme",
+		Layout: LayoutConfig{
+			Columns:    []string{"shortcut"},
+			TableStyle: "simple",
+			MaxWidth:   120,
+		},
+	}
+
+	result = invalidThemeConfig.Validate()
+	if result.Valid {
+		t.Error("Expected validation failure for invalid theme")
+	}
+
+	// Test config with invalid table style
+	invalidStyleConfig := &Config{
+		Theme: "default",
+		Layout: LayoutConfig{
+			Columns:    []string{"shortcut"},
+			TableStyle: "invalid-style",
+			MaxWidth:   120,
+		},
+	}
+
+	result = invalidStyleConfig.Validate()
+	if result.Valid {
+		t.Error("Expected validation failure for invalid table style")
+	}
+}
+
+func TestValidationHelpers(t *testing.T) {
+	// Test isValidTheme - use actual valid themes from ValidThemes
+	validThemes := []string{"default", "dark", "light", "minimal"}
+	for _, theme := range validThemes {
+		if !isValidTheme(theme) {
+			t.Errorf("Theme %s should be valid", theme)
+		}
+	}
+
+	if isValidTheme("invalid-theme") {
+		t.Error("invalid-theme should not be valid")
+	}
+
+	// Test isValidTableStyle - use actual valid styles from ValidTableStyles
+	validStyles := []string{"simple", "rounded", "bold", "minimal"}
+	for _, style := range validStyles {
+		if !isValidTableStyle(style) {
+			t.Errorf("Table style %s should be valid", style)
+		}
+	}
+
+	if isValidTableStyle("invalid-style") {
+		t.Error("invalid-style should not be valid")
+	}
+
+	// Test isValidColumn - use actual valid columns
+	validColumns := []string{"shortcut", "description", "category"}
+	for _, column := range validColumns {
+		if !isValidColumn(column) {
+			t.Errorf("Column %s should be valid", column)
+		}
+	}
+
+	if isValidColumn("invalid-column") {
+		t.Error("invalid-column should not be valid")
+	}
+}
