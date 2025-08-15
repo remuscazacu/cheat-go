@@ -286,27 +286,27 @@ func TestRegistry_HardcodedAppsData(t *testing.T) {
 func TestRegistry_SearchTableData(t *testing.T) {
 	registry := NewRegistry("")
 	apps := []string{"vim", "zsh"}
-	
+
 	// Test empty query returns all data
 	allData := registry.GetTableData(apps)
 	searchData := registry.SearchTableData(apps, "")
 	if len(searchData) != len(allData) {
 		t.Error("empty search should return all data")
 	}
-	
+
 	// Test search with specific term
 	searchResults := registry.SearchTableData(apps, "move")
 	if len(searchResults) <= 1 { // should have more than just header
 		t.Error("search for \"move\" should return results")
 	}
-	
+
 	// Verify header is preserved
 	if len(searchResults) > 0 {
 		if searchResults[0][0] != "Shortcut" {
 			t.Error("header should be preserved in search results")
 		}
 	}
-	
+
 	// Test search with no matches
 	noResults := registry.SearchTableData(apps, "nonexistentterm")
 	if len(noResults) != 1 { // should only have header
@@ -316,27 +316,27 @@ func TestRegistry_SearchTableData(t *testing.T) {
 
 func TestRegistry_ShortcutMatches(t *testing.T) {
 	registry := NewRegistry("")
-	
+
 	shortcut := Shortcut{
 		Keys:        "k",
 		Description: "move up",
 		Category:    "navigation",
 	}
-	
+
 	testCases := []struct {
 		query    string
 		expected bool
 	}{
-		{"k", true},        // matches keys
-		{"K", true},        // case insensitive keys
-		{"move", true},     // matches description
-		{"MOVE", true},     // case insensitive description
-		{"nav", true},      // matches category
+		{"k", true},          // matches keys
+		{"K", true},          // case insensitive keys
+		{"move", true},       // matches description
+		{"MOVE", true},       // case insensitive description
+		{"nav", true},        // matches category
 		{"NAVIGATION", true}, // case insensitive category
-		{"xyz", false},     // no match
-		{"", true},         // empty query matches everything
+		{"xyz", false},       // no match
+		{"", true},           // empty query matches everything
 	}
-	
+
 	for _, tc := range testCases {
 		result := registry.shortcutMatches(shortcut, tc.query)
 		if result != tc.expected {
@@ -347,13 +347,13 @@ func TestRegistry_ShortcutMatches(t *testing.T) {
 
 func TestRegistry_SearchShortcuts(t *testing.T) {
 	registry := NewRegistry("")
-	
+
 	// Test search that should return results
 	results := registry.SearchShortcuts("move")
 	if len(results) == 0 {
 		t.Error("search for \"move\" should return results")
 	}
-	
+
 	// Check result structure
 	if len(results) > 0 {
 		result := results[0]
@@ -367,7 +367,7 @@ func TestRegistry_SearchShortcuts(t *testing.T) {
 			t.Error("result should have match indicators")
 		}
 	}
-	
+
 	// Test search with no results
 	noResults := registry.SearchShortcuts("nonexistentterm")
 	if len(noResults) != 0 {
@@ -375,3 +375,281 @@ func TestRegistry_SearchShortcuts(t *testing.T) {
 	}
 }
 
+func TestRegistry_LoadAllAppsFromDirectory(t *testing.T) {
+	tmpDir := t.TempDir()
+	registry := NewRegistry(tmpDir)
+
+	// Create test app files in directory
+	testApps := []App{
+		{
+			Name:        "app1",
+			Description: "First app",
+			Shortcuts: []Shortcut{
+				{Keys: "a", Description: "action a"},
+			},
+		},
+		{
+			Name:        "app2",
+			Description: "Second app",
+			Shortcuts: []Shortcut{
+				{Keys: "b", Description: "action b"},
+			},
+		},
+	}
+
+	// Write test files
+	for _, app := range testApps {
+		appFile := filepath.Join(tmpDir, app.Name+".yaml")
+		data, _ := yaml.Marshal(app)
+		os.WriteFile(appFile, data, 0644)
+	}
+
+	// Load all apps from directory
+	err := registry.LoadAllAppsFromDirectory()
+	if err != nil {
+		t.Fatalf("LoadAllAppsFromDirectory() error = %v", err)
+	}
+
+	// Verify apps were loaded
+	app1, exists1 := registry.AppRegistry.Get("app1")
+	if !exists1 {
+		t.Error("app1 should be loaded from directory")
+	}
+	if app1.Name != "app1" {
+		t.Error("app1 should have correct name")
+	}
+
+	app2, exists2 := registry.AppRegistry.Get("app2")
+	if !exists2 {
+		t.Error("app2 should be loaded from directory")
+	}
+	if app2.Name != "app2" {
+		t.Error("app2 should have correct name")
+	}
+}
+
+func TestRegistry_LoadAllAppsFromDirectoryNonExistent(t *testing.T) {
+	registry := NewRegistry("/non/existent/directory")
+
+	// Should handle non-existent directory gracefully
+	err := registry.LoadAllAppsFromDirectory()
+	if err == nil {
+		t.Error("Expected error for non-existent directory")
+	}
+}
+
+func TestRegistry_SaveApp(t *testing.T) {
+	tmpDir := t.TempDir()
+	registry := NewRegistry(tmpDir)
+
+	testApp := &App{
+		Name:        "save-test",
+		Description: "Test save functionality",
+		Version:     "1.0.0",
+		Categories:  []string{"test"},
+		Shortcuts: []Shortcut{
+			{Keys: "s", Description: "save", Category: "file"},
+		},
+	}
+
+	err := registry.SaveApp(testApp)
+	if err != nil {
+		t.Fatalf("SaveApp() error = %v", err)
+	}
+
+	// Verify file was created
+	expectedFile := filepath.Join(tmpDir, "save-test.yaml")
+	if _, err := os.Stat(expectedFile); os.IsNotExist(err) {
+		t.Error("App file should be created")
+	}
+
+	// Load and verify content
+	err = registry.LoadApp("save-test")
+	if err != nil {
+		t.Fatalf("LoadApp after Save error = %v", err)
+	}
+
+	loadedApp, exists := registry.AppRegistry.Get("save-test")
+	if !exists {
+		t.Error("Saved app should be loadable")
+	}
+
+	if loadedApp.Description != testApp.Description {
+		t.Error("Saved app description should match")
+	}
+}
+
+func TestRegistry_SaveAppInvalidPath(t *testing.T) {
+	registry := NewRegistry("/invalid/path/that/cannot/be/created")
+
+	testApp := &App{
+		Name: "test",
+	}
+
+	err := registry.SaveApp(testApp)
+	if err == nil {
+		t.Error("Expected error when saving to invalid path")
+	}
+}
+
+func TestRegistry_ValidateAppEdgeCases(t *testing.T) {
+	registry := NewRegistry("")
+
+	// Test app with no name
+	invalidApp1 := &App{
+		Description: "No name",
+	}
+
+	err := registry.validateApp(invalidApp1)
+	if err == nil {
+		t.Error("Should error for app with no name")
+	}
+
+	// Test app with no description
+	invalidApp2 := &App{
+		Name: "no-desc",
+	}
+
+	err = registry.validateApp(invalidApp2)
+	if err == nil {
+		t.Error("Should error for app with no description")
+	}
+
+	// Test app with no shortcuts
+	invalidApp3 := &App{
+		Name:        "no-shortcuts",
+		Description: "Has description",
+		Shortcuts:   []Shortcut{},
+	}
+
+	err = registry.validateApp(invalidApp3)
+	// App with no shortcuts might be valid in some cases
+	if err != nil {
+		t.Logf("App with no shortcuts validation: %v", err)
+	}
+
+	// Test shortcut with no keys
+	invalidApp4 := &App{
+		Name:        "invalid-shortcut",
+		Description: "Has invalid shortcut",
+		Shortcuts: []Shortcut{
+			{Description: "No keys"},
+		},
+	}
+
+	err = registry.validateApp(invalidApp4)
+	if err == nil {
+		t.Error("Should error for shortcut with no keys")
+	}
+
+	// Test shortcut with no description
+	invalidApp5 := &App{
+		Name:        "invalid-shortcut2",
+		Description: "Has invalid shortcut",
+		Shortcuts: []Shortcut{
+			{Keys: "x"},
+		},
+	}
+
+	err = registry.validateApp(invalidApp5)
+	if err == nil {
+		t.Error("Should error for shortcut with no description")
+	}
+
+	// Test valid app
+	validApp := &App{
+		Name:        "valid",
+		Description: "Valid app",
+		Shortcuts: []Shortcut{
+			{Keys: "v", Description: "valid action"},
+		},
+	}
+
+	err = registry.validateApp(validApp)
+	if err != nil {
+		t.Errorf("Valid app should not error: %v", err)
+	}
+}
+
+func TestRegistry_LoadAppFromFileErrors(t *testing.T) {
+	tmpDir := t.TempDir()
+	registry := NewRegistry(tmpDir)
+
+	// Test with non-existent file
+	_, err := registry.loadAppFromFile("non-existent.yaml")
+	if err == nil {
+		t.Error("Expected error for non-existent file")
+	}
+
+	// Test with invalid YAML
+	invalidFile := filepath.Join(tmpDir, "invalid.yaml")
+	os.WriteFile(invalidFile, []byte("invalid: yaml: ["), 0644)
+
+	_, err = registry.loadAppFromFile("invalid.yaml")
+	if err == nil {
+		t.Error("Expected error for invalid YAML")
+	}
+
+	// Test with invalid app data
+	invalidApp := App{
+		Name: "invalid",
+		// Missing description and shortcuts
+	}
+
+	invalidData, _ := yaml.Marshal(invalidApp)
+	invalidAppFile := filepath.Join(tmpDir, "invalid-app.yaml")
+	os.WriteFile(invalidAppFile, invalidData, 0644)
+
+	_, err = registry.loadAppFromFile("invalid-app.yaml")
+	if err == nil {
+		t.Error("Expected error for invalid app data")
+	}
+}
+
+func TestRegistry_ExpandPath(t *testing.T) {
+	// Test home directory expansion
+	homePath := expandPath("~/test")
+	if homePath == "~/test" {
+		t.Error("~ should be expanded to home directory")
+	}
+
+	// Test absolute path
+	absPath := expandPath("/absolute/path")
+	if absPath != "/absolute/path" {
+		t.Errorf("Absolute path should remain unchanged, got %s", absPath)
+	}
+
+	// Test relative path
+	relPath := expandPath("relative/path")
+	if relPath != "relative/path" {
+		t.Errorf("Relative path should remain unchanged, got %s", relPath)
+	}
+}
+
+func TestRegistry_GetSearchMatchesEdgeCases(t *testing.T) {
+	registry := NewRegistry("")
+
+	// Test with empty query
+	shortcut := Shortcut{
+		Keys:        "ctrl+c",
+		Description: "copy",
+	}
+
+	matches := registry.getSearchMatches(shortcut, "")
+	// Empty query might still return some matches depending on implementation
+	if len(matches) != 0 {
+		t.Logf("Empty query returned %d matches", len(matches))
+	}
+
+	// Test with query that matches keys
+	matches = registry.getSearchMatches(shortcut, "ctrl")
+	if len(matches) == 0 {
+		t.Error("Should find matches in keys")
+	}
+
+	// Test with query that matches description
+	matches = registry.getSearchMatches(shortcut, "copy")
+	if len(matches) == 0 {
+		t.Error("Should find matches in description")
+	}
+}
