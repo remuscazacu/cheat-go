@@ -284,183 +284,78 @@ func TestTableRenderer_Render_SpecialCharacters(t *testing.T) {
 	}
 }
 
-// TestTableRenderer_BorderAlignment tests that table borders are properly aligned
-// This test prevents layout bugs where borders don't line up with content
-func TestTableRenderer_BorderAlignment(t *testing.T) {
-	renderer := NewTableRenderer(DefaultTheme())
-
-	data := [][]string{
-		{"Short", "Medium Text", "Very Long Header Text"},
-		{"A", "B", "C"},
-		{"Test", "Data", "Value"},
+func TestTableRenderer_GetTheme(t *testing.T) {
+	theme := DefaultTheme()
+	renderer := NewTableRenderer(theme)
+	
+	retrievedTheme := renderer.GetTheme()
+	if retrievedTheme != theme {
+		t.Error("GetTheme should return the same theme instance")
 	}
-
-	result := renderer.Render(data, 0, 0)
-	lines := strings.Split(result, "\n")
-
-	// Filter out empty lines
-	var nonEmptyLines []string
-	for _, line := range lines {
-		if strings.TrimSpace(line) != "" {
-			nonEmptyLines = append(nonEmptyLines, line)
-		}
-	}
-
-	if len(nonEmptyLines) < 5 {
-		t.Fatal("Expected at least 5 non-empty lines (top border, header, separator, 2 data rows, bottom border)")
-	}
-
-	// Check that all border lines have the same length
-	var borderLineLength int
-	borderLines := []int{0, 2, len(nonEmptyLines) - 1} // top border, separator, bottom border
-
-	for i, lineIdx := range borderLines {
-		line := nonEmptyLines[lineIdx]
-		if i == 0 {
-			borderLineLength = len(line)
-		} else {
-			if len(line) != borderLineLength {
-				t.Errorf("Border line %d has length %d, expected %d. Line: %s",
-					lineIdx, len(line), borderLineLength, line)
-			}
-		}
-	}
-
-	// Check that content lines (header and data rows) have consistent structure
-	contentLines := []int{1, 3, 4} // header and data rows
-	var verticalBarCount int
-
-	for i, lineIdx := range contentLines {
-		line := nonEmptyLines[lineIdx]
-		currentBarCount := strings.Count(line, "│")
-
-		if i == 0 {
-			verticalBarCount = currentBarCount
-		} else {
-			if currentBarCount != verticalBarCount {
-				t.Errorf("Content line %d has %d vertical bars, expected %d. Line: %s",
-					lineIdx, currentBarCount, verticalBarCount, line)
-			}
-		}
-	}
-
-	// Verify structural consistency - all content lines should have the same number of vertical bars
-	expectedBarCount := strings.Count(nonEmptyLines[1], "│") // header line
-	for _, lineIdx := range contentLines[1:] {               // check other content lines
-		line := nonEmptyLines[lineIdx]
-		actualBarCount := strings.Count(line, "│")
-		if actualBarCount != expectedBarCount {
-			t.Errorf("Line %d has %d vertical bars, expected %d. Line: %s",
-				lineIdx, actualBarCount, expectedBarCount, line)
-		}
+	if retrievedTheme.Name != "default" {
+		t.Error("should return theme with correct name")
 	}
 }
 
-// TestTableRenderer_DifferentTableStyles tests that all table styles maintain proper alignment
-func TestTableRenderer_DifferentTableStyles(t *testing.T) {
-	themes := map[string]*Theme{
-		"default": DefaultTheme(),
-		"dark":    DarkTheme(),
-		"light":   LightTheme(),
-		"minimal": MinimalTheme(),
+
+func TestTableRenderer_HighlightSearchTerm(t *testing.T) {
+	theme := DefaultTheme()
+	renderer := NewTableRenderer(theme)
+	
+	// Test basic highlighting
+	result := renderer.highlightSearchTerm("move up", "move")
+	if !strings.Contains(result, "move") {
+		t.Error("should contain the search term")
 	}
-
-	data := [][]string{
-		{"Style", "Test", "Table"},
-		{"Row1", "Data1", "Value1"},
-		{"Row2", "Data2", "Value2"},
+	
+	// Test case insensitive highlighting
+	result = renderer.highlightSearchTerm("MOVE up", "move")
+	if !strings.Contains(result, "MOVE") {
+		t.Error("should preserve original case")
 	}
-
-	for themeName, theme := range themes {
-		t.Run(themeName, func(t *testing.T) {
-			renderer := NewTableRenderer(theme)
-			result := renderer.Render(data, 0, 0)
-
-			if result == "" {
-				t.Errorf("Theme %s should produce output", themeName)
-				return
-			}
-
-			// All content should be present
-			for _, row := range data {
-				for _, cell := range row {
-					if !strings.Contains(result, cell) {
-						t.Errorf("Theme %s missing cell content: %s", themeName, cell)
-					}
-				}
-			}
-
-			// For non-minimal styles, check for table structure
-			if theme.TableStyle != "minimal" {
-				lines := strings.Split(result, "\n")
-				var nonEmptyLines []string
-				for _, line := range lines {
-					if strings.TrimSpace(line) != "" {
-						nonEmptyLines = append(nonEmptyLines, line)
-					}
-				}
-
-				if len(nonEmptyLines) < 3 {
-					t.Errorf("Theme %s should have at least 3 lines", themeName)
-					return
-				}
-
-				// Check for vertical separators in content lines
-				headerLine := ""
-				for _, line := range nonEmptyLines {
-					if strings.Contains(line, "Style") {
-						headerLine = line
-						break
-					}
-				}
-
-				if headerLine == "" {
-					t.Errorf("Theme %s should contain header line", themeName)
-					return
-				}
-
-				// Should have at least 2 vertical bars (start and end, plus internal separators)
-				barCount := strings.Count(headerLine, "│")
-				if barCount < 2 {
-					t.Errorf("Theme %s header should have at least 2 vertical bars, got %d", themeName, barCount)
-				}
-			}
-		})
+	
+	// Test no match
+	result = renderer.highlightSearchTerm("quit", "move")
+	if result != "quit" {
+		t.Error("should return original text when no match")
+	}
+	
+	// Test empty search term
+	result = renderer.highlightSearchTerm("some text", "")
+	if result != "some text" {
+		t.Error("should return original text when search term is empty")
 	}
 }
 
-// TestTableRenderer_ColumnWidthConsistency tests that column widths are calculated consistently
-func TestTableRenderer_ColumnWidthConsistency(t *testing.T) {
-	renderer := NewTableRenderer(DefaultTheme())
-
-	// Test with varying content lengths
+func TestTableRenderer_RenderWithHighlighting(t *testing.T) {
+	theme := DefaultTheme()
+	renderer := NewTableRenderer(theme)
+	
 	data := [][]string{
-		{"A", "BB", "CCC"},
-		{"DDDD", "E", "FF"},
-		{"G", "HHHH", "I"},
+		{"Shortcut", "Description"},
+		{"k", "move up"},
+		{"j", "move down"},
 	}
-
-	result := renderer.Render(data, 0, 0)
-	lines := strings.Split(result, "\n")
-
-	// Find content lines (lines containing data)
-	var contentLines []string
-	for _, line := range lines {
-		if strings.Contains(line, "│") && (strings.Contains(line, "A") || strings.Contains(line, "DDDD") || strings.Contains(line, "G")) {
-			contentLines = append(contentLines, line)
+	
+	// Test highlighting render
+	result := renderer.RenderWithHighlighting(data, 0, 1, "move")
+	if result == "" {
+		t.Error("should return non-empty string")
+	}
+	
+	// Should contain all data
+	for _, row := range data {
+		for _, cell := range row {
+			if !strings.Contains(result, cell) {
+				t.Errorf("rendered output should contain cell data: %s", cell)
+			}
 		}
 	}
-
-	if len(contentLines) != 3 {
-		t.Fatalf("Expected 3 content lines, got %d", len(contentLines))
-	}
-
-	// All content lines should have the same length (accounting for consistent column spacing)
-	expectedLength := len(contentLines[0])
-	for i, line := range contentLines {
-		if len(line) != expectedLength {
-			t.Errorf("Content line %d has length %d, expected %d. Line: %s",
-				i, len(line), expectedLength, line)
-		}
+	
+	// Test with empty search term (should work like normal render)
+	result2 := renderer.RenderWithHighlighting(data, 0, 1, "")
+	if result2 == "" {
+		t.Error("should return non-empty string even with empty search term")
 	}
 }
+

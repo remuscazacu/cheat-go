@@ -11,6 +11,8 @@ type Theme struct {
 	BorderColor      lipgloss.Color
 	SelectedRowStyle lipgloss.Style
 	CategoryStyle    lipgloss.Style
+	SearchStyle      lipgloss.Style
+	SearchInputStyle lipgloss.Style
 	TableStyle       string
 }
 
@@ -24,6 +26,8 @@ func DefaultTheme() *Theme {
 		BorderColor:      lipgloss.Color("240"),
 		SelectedRowStyle: lipgloss.NewStyle().Background(lipgloss.Color("238")),
 		CategoryStyle:    lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("39")),
+		SearchStyle:      lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("220")),
+		SearchInputStyle: lipgloss.NewStyle().Background(lipgloss.Color("235")),
 		TableStyle:       "simple",
 	}
 }
@@ -38,6 +42,8 @@ func DarkTheme() *Theme {
 		BorderColor:      lipgloss.Color("238"),
 		SelectedRowStyle: lipgloss.NewStyle().Background(lipgloss.Color("236")),
 		CategoryStyle:    lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("82")),
+		SearchStyle:      lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("226")),
+		SearchInputStyle: lipgloss.NewStyle().Background(lipgloss.Color("234")),
 		TableStyle:       "rounded",
 	}
 }
@@ -52,6 +58,8 @@ func LightTheme() *Theme {
 		BorderColor:      lipgloss.Color("244"),
 		SelectedRowStyle: lipgloss.NewStyle().Background(lipgloss.Color("254")),
 		CategoryStyle:    lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("28")),
+		SearchStyle:      lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("196")),
+		SearchInputStyle: lipgloss.NewStyle().Background(lipgloss.Color("255")),
 		TableStyle:       "simple",
 	}
 }
@@ -66,6 +74,8 @@ func MinimalTheme() *Theme {
 		BorderColor:      lipgloss.Color("250"),
 		SelectedRowStyle: lipgloss.NewStyle().Underline(true),
 		CategoryStyle:    lipgloss.NewStyle().Bold(true),
+		SearchStyle:      lipgloss.NewStyle().Bold(true),
+		SearchInputStyle: lipgloss.NewStyle().Underline(true),
 		TableStyle:       "minimal",
 	}
 }

@@ -15,6 +15,9 @@
 - 🚀 **Fast & Lightweight** - Built with Go for minimal resource usage
 - 🎨 **Beautiful TUI** - Modern terminal interface with multiple themes and table styles
 - ⌨️ **Vim-style Navigation** - Support for both arrow keys and hjkl movement
+- 🔍 **Interactive Search** - Real-time search through shortcuts and descriptions with highlighting
+- 🎯 **App Filtering** - Select specific applications to focus on with visual interface
+- ⌨️ **Rich Keyboard Shortcuts** - Comprehensive hotkey system with built-in help
 - 📦 **Configurable** - YAML-based configuration with sensible defaults
 - 🔧 **Extensible** - Easy to add custom applications and shortcuts
 - 🌐 **Unicode Support** - Full support for international characters and emojis
@@ -35,6 +38,7 @@ Out of the box, cheat-go includes shortcuts for:
 
 ## 📸 Screenshots
 
+### Main Interface
 ```
  Shortcut │ vim     │ zsh            │ dwm         │ st       │ lf      │ zathura  
 ──────────┼─────────┼────────────────┼─────────────┼──────────┼─────────┼──────────
@@ -45,7 +49,24 @@ Out of the box, cheat-go includes shortcuts for:
  /        │ search  │ search history │ -           │ search   │ search  │ search   
  q        │ quit    │ exit           │ close win   │ exit     │ quit    │ quit     
 
-Use arrow keys or hjkl to move. Press q to quit.
+Arrow keys/hjkl: move • /: search • f: filter • Ctrl+R: refresh • ?: help • q: quit
+```
+
+### Search Mode
+```
+ Shortcut │ vim     │ zsh            │ dwm         │ st       │ lf      │ zathura  
+──────────┼─────────┼────────────────┼─────────────┼──────────┼─────────┼──────────
+ k        │ ↑ MOVE  │ up history     │ focus up    │ ↑ scroll │ up      │ scroll ↑ 
+ j        │ ↓ MOVE  │ down history   │ focus down  │ ↓ scroll │ down    │ scroll ↓ 
+
+Search: move_
+Type to search, Enter to confirm, Esc to cancel
+```
+
+### App Filter Mode
+```
+Filter Apps:  [1] ✓vim [2] ✓zsh [3] dwm [4] st [5] lf [6] zathura
+1-9: toggle apps, a: all, c: clear, Enter: apply, Esc: cancel
 ```
 
 ## 🚀 Installation
@@ -98,52 +119,65 @@ Simply run the application:
 cheat-go
 ```
 
+### Search Functionality
+
+cheat-go includes powerful search capabilities to help you find shortcuts quickly:
+
+- **Press `/`** to enter search mode
+- **Type your query** to search through shortcut keys, descriptions, and categories
+- **Matched terms are highlighted** in the results for easy identification
+- **Press Enter** to confirm search and exit search mode
+- **Press Esc** to cancel search and return to full table
+
+### App Filtering
+
+Focus on specific applications by filtering the displayed columns:
+
+- **Press `f`** to enter filter mode
+- **Use number keys (1-9)** to toggle individual applications
+- **Press `a`** to select all applications
+- **Press `c`** to clear all selections
+- **Press Enter** to apply the filter
+- **Press Esc** to cancel and return to previous state
+
+### Interactive Help
+
+- **Press `?`** at any time to see the comprehensive help screen
+- The help screen shows all available keyboard shortcuts organized by category
+- **Press `?` or `Esc`** to close the help screen
+
 ### Navigation
 
 - **Arrow Keys** or **hjkl** - Navigate through the table
 - **q** or **Ctrl+C** - Quit the application
+- **/** - Enter search mode
+- **f** - Enter filter mode
+- **?** - Show help screen
 
 ### Keyboard Shortcuts
 
-| Key | Action |
-|-----|--------|
-| `↑` / `k` | Move cursor up |
-| `↓` / `j` | Move cursor down |
-| `←` / `h` | Move cursor left |
-| `→` / `l` | Move cursor right |
-| `q` | Quit application |
-| `Ctrl+C` | Force quit |
-
-## 🎨 Themes and Styling
-
-cheat-go offers multiple visual themes and table styles to customize your experience:
-
-### Available Themes
-
-- **default** - Standard theme with balanced colors
-- **dark** - High-contrast dark theme for dark terminals
-- **light** - Clean light theme for light terminals  
-- **minimal** - Minimalist theme with reduced visual elements
-
-### Available Table Styles
-
-- **simple** - Clean borders with horizontal and vertical lines
-- **rounded** - Elegant rounded corners for a modern look
-- **bold** - Thick borders for enhanced visibility
-- **minimal** - Minimal borders with spacing-based separation
-
-### Theme Examples
-
-```bash
-# Use different themes
-cheat-go --theme dark
-cheat-go --theme light
-cheat-go --theme minimal
-
-# Combine with different table styles
-cheat-go --theme dark --table-style rounded
-cheat-go --theme minimal --table-style minimal
-```
+| Category | Key | Action |
+|----------|-----|--------|
+| **Navigation** | `↑` / `k` | Move cursor up |
+| | `↓` / `j` | Move cursor down |
+| | `←` / `h` | Move cursor left |
+| | `→` / `l` | Move cursor right |
+| | `Home` / `Ctrl+A` | Go to first row |
+| | `End` / `Ctrl+E` | Go to last row |
+| **Search** | `/` | Enter search mode |
+| | `Enter` | Confirm search |
+| | `Esc` | Exit search / clear filters |
+| | `Backspace` | Delete character |
+| | `Ctrl+U` | Clear search query |
+| **Filtering** | `f` / `Ctrl+F` | Enter filter mode |
+| | `1-9` | Toggle app selection |
+| | `a` | Select all apps |
+| | `c` | Clear all selections |
+| | `Enter` | Apply filter |
+| | `Esc` | Cancel filter |
+| **General** | `Ctrl+R` | Refresh data |
+| | `?` | Show/hide help |
+| | `q` / `Ctrl+C` | Quit application |
 
 ## ⚙️ Configuration
 
@@ -165,14 +199,14 @@ apps:
   - lf
   - zathura
 
-theme: default  # options: "default", "dark", "light", "minimal"
+theme: default  # or "dark"
 
 layout:
   columns:
     - shortcut
     - description
   show_categories: false
-  table_style: simple  # options: "simple", "rounded", "bold", "minimal"
+  table_style: simple
   max_width: 120
 
 keybinds:
@@ -236,7 +270,7 @@ cheat-go/
 
 - **Apps Package** - Manages application definitions and shortcut data
 - **Config Package** - Handles configuration loading and validation
-- **UI Package** - Provides table rendering, multiple themes, and table styling capabilities
+- **UI Package** - Provides table rendering and theming capabilities
 - **Main** - Coordinates the TUI application using Bubble Tea
 
 ## 🧪 Development
@@ -265,7 +299,7 @@ go build .
 
 ### Testing
 
-The project includes a comprehensive test suite with 94.3% coverage and specialized layout tests:
+The project includes a comprehensive test suite with 94.3% coverage:
 
 ```bash
 # Run all tests
@@ -280,9 +314,6 @@ go test ./... -race
 # Generate coverage report
 go test ./... -coverprofile=coverage.out
 go tool cover -html=coverage.out -o coverage.html
-
-# Run specific UI tests (including layout alignment tests)
-go test ./pkg/ui -v
 ```
 
 ### Code Quality
@@ -356,16 +387,21 @@ Contributions are welcome! Please feel free to submit a Pull Request. For major 
 
 ### Planned Features
 
-- [ ] Search functionality within shortcuts
+- [x] Search functionality within shortcuts
+- [x] Interactive search with highlighting
+- [x] App filtering and selection
+- [x] Comprehensive keyboard shortcuts
+- [x] Multiple theme support (default, dark, light, minimal)
+- [x] Multiple table styles (simple, rounded, bold, minimal)
+- [x] Built-in help system
 - [ ] Custom key bindings configuration
 - [ ] Plugin system for external applications
 - [ ] Export functionality (JSON, CSV, Markdown)
 - [ ] Interactive tutorial mode
 - [ ] Fuzzy search across applications
-- [ ] Shortcut categories and filtering
-- [x] Multiple theme support (default, dark, light, minimal)
-- [x] Multiple table styles (simple, rounded, bold, minimal)
+- [ ] Shortcut categories and advanced filtering
 - [ ] Application profiles (work, gaming, etc.)
+- [ ] Search history and saved searches
 
 ### Version History
 
@@ -373,6 +409,7 @@ Contributions are welcome! Please feel free to submit a Pull Request. For major 
 - **v0.2.0** - Added configuration system and custom apps
 - **v0.3.0** - Comprehensive test suite and improved error handling
 - **v0.4.0** - Enhanced UI with multiple table styles and improved themes
+- **v0.5.0** - Interactive search, app filtering, and comprehensive keyboard shortcuts
 
 ## 🐛 Troubleshooting
 
@@ -393,6 +430,13 @@ Contributions are welcome! Please feel free to submit a Pull Request. For major 
 - Try different themes: `default`, `dark`, `light`, or `minimal`
 - Try different table styles: `simple`, `rounded`, `bold`, or `minimal`
 - Check terminal size (minimum 80x24 recommended)
+- Use `cheat-go --help` to see all available options
+
+**Q: Search not finding results**
+- Search is case-insensitive and searches keys, descriptions, and categories
+- Try shorter search terms or partial matches
+- Use Esc to clear filters and return to full table
+- Press ? for help with search keyboard shortcuts
 
 ### Reporting Issues
 

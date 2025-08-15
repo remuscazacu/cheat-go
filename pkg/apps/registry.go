@@ -309,6 +309,108 @@ func (r *Registry) GetTableData(appNames []string) [][]string {
 	return rows
 }
 
+// SearchTableData returns filtered table data based on search query
+func (r *Registry) SearchTableData(appNames []string, query string) [][]string {
+	// If no query, return all data
+	if query == "" {
+		return r.GetTableData(appNames)
+	}
+
+	// Header row
+	header := make([]string, len(appNames)+1)
+	header[0] = "Shortcut"
+	copy(header[1:], appNames)
+
+	// Collect shortcuts that match the search query
+	shortcutMap := make(map[string][]string)
+	for i, appName := range appNames {
+		if app, exists := r.Get(appName); exists {
+			for _, shortcut := range app.Shortcuts {
+				// Search in keys, description, and category
+				if r.shortcutMatches(shortcut, query) {
+					if _, exists := shortcutMap[shortcut.Keys]; !exists {
+						shortcutMap[shortcut.Keys] = make([]string, len(appNames))
+						for j := range shortcutMap[shortcut.Keys] {
+							shortcutMap[shortcut.Keys][j] = "-"
+						}
+					}
+					shortcutMap[shortcut.Keys][i] = shortcut.Description
+				}
+			}
+		}
+	}
+
+	// Convert to table format
+	rows := [][]string{header}
+	for keys, descriptions := range shortcutMap {
+		row := make([]string, len(appNames)+1)
+		row[0] = keys
+		copy(row[1:], descriptions)
+		rows = append(rows, row)
+	}
+
+	return rows
+}
+
+// shortcutMatches checks if a shortcut matches the search query
+func (r *Registry) shortcutMatches(shortcut Shortcut, query string) bool {
+	queryLower := strings.ToLower(query)
+
+	// Search in keys
+	if strings.Contains(strings.ToLower(shortcut.Keys), queryLower) {
+		return true
+	}
+
+	// Search in description
+	if strings.Contains(strings.ToLower(shortcut.Description), queryLower) {
+		return true
+	}
+
+	// Search in category
+	if strings.Contains(strings.ToLower(shortcut.Category), queryLower) {
+		return true
+	}
+
+	return false
+}
+
+// SearchShortcuts returns all shortcuts matching the query across all apps
+func (r *Registry) SearchShortcuts(query string) []ShortcutResult {
+	var results []ShortcutResult
+	queryLower := strings.ToLower(query)
+
+	for appName, app := range r.AppRegistry.apps {
+		for _, shortcut := range app.Shortcuts {
+			if r.shortcutMatches(shortcut, query) {
+				results = append(results, ShortcutResult{
+					AppName:  appName,
+					Shortcut: shortcut,
+					Matches:  r.getSearchMatches(shortcut, queryLower),
+				})
+			}
+		}
+	}
+
+	return results
+}
+
+// getSearchMatches returns which fields matched the search query
+func (r *Registry) getSearchMatches(shortcut Shortcut, queryLower string) []string {
+	var matches []string
+
+	if strings.Contains(strings.ToLower(shortcut.Keys), queryLower) {
+		matches = append(matches, "keys")
+	}
+	if strings.Contains(strings.ToLower(shortcut.Description), queryLower) {
+		matches = append(matches, "description")
+	}
+	if strings.Contains(strings.ToLower(shortcut.Category), queryLower) {
+		matches = append(matches, "category")
+	}
+
+	return matches
+}
+
 // expandPath expands ~ to home directory
 func expandPath(path string) string {
 	if len(path) == 0 || path[0] != '~' {
