@@ -55,3 +55,10 @@ func (r *AppRegistry) List() []string {
 	}
 	return names
 }
+
+// ShortcutResult represents a search result containing a shortcut and its context
+type ShortcutResult struct {
+	AppName  string   // Name of the application this shortcut belongs to
+	Shortcut Shortcut // The matched shortcut
+	Matches  []string // Which fields matched the search (keys, description, category)
+}

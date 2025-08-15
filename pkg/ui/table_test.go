@@ -283,3 +283,79 @@ func TestTableRenderer_Render_SpecialCharacters(t *testing.T) {
 		t.Error("should contain header data")
 	}
 }
+
+func TestTableRenderer_GetTheme(t *testing.T) {
+	theme := DefaultTheme()
+	renderer := NewTableRenderer(theme)
+	
+	retrievedTheme := renderer.GetTheme()
+	if retrievedTheme != theme {
+		t.Error("GetTheme should return the same theme instance")
+	}
+	if retrievedTheme.Name != "default" {
+		t.Error("should return theme with correct name")
+	}
+}
+
+
+func TestTableRenderer_HighlightSearchTerm(t *testing.T) {
+	theme := DefaultTheme()
+	renderer := NewTableRenderer(theme)
+	
+	// Test basic highlighting
+	result := renderer.highlightSearchTerm("move up", "move")
+	if !strings.Contains(result, "move") {
+		t.Error("should contain the search term")
+	}
+	
+	// Test case insensitive highlighting
+	result = renderer.highlightSearchTerm("MOVE up", "move")
+	if !strings.Contains(result, "MOVE") {
+		t.Error("should preserve original case")
+	}
+	
+	// Test no match
+	result = renderer.highlightSearchTerm("quit", "move")
+	if result != "quit" {
+		t.Error("should return original text when no match")
+	}
+	
+	// Test empty search term
+	result = renderer.highlightSearchTerm("some text", "")
+	if result != "some text" {
+		t.Error("should return original text when search term is empty")
+	}
+}
+
+func TestTableRenderer_RenderWithHighlighting(t *testing.T) {
+	theme := DefaultTheme()
+	renderer := NewTableRenderer(theme)
+	
+	data := [][]string{
+		{"Shortcut", "Description"},
+		{"k", "move up"},
+		{"j", "move down"},
+	}
+	
+	// Test highlighting render
+	result := renderer.RenderWithHighlighting(data, 0, 1, "move")
+	if result == "" {
+		t.Error("should return non-empty string")
+	}
+	
+	// Should contain all data
+	for _, row := range data {
+		for _, cell := range row {
+			if !strings.Contains(result, cell) {
+				t.Errorf("rendered output should contain cell data: %s", cell)
+			}
+		}
+	}
+	
+	// Test with empty search term (should work like normal render)
+	result2 := renderer.RenderWithHighlighting(data, 0, 1, "")
+	if result2 == "" {
+		t.Error("should return non-empty string even with empty search term")
+	}
+}
+

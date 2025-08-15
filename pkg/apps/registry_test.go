@@ -280,3 +280,97 @@ func TestRegistry_HardcodedAppsData(t *testing.T) {
 		}
 	}
 }
+
+// Test search functionality
+func TestRegistry_SearchTableData(t *testing.T) {
+	registry := NewRegistry("")
+	apps := []string{"vim", "zsh"}
+	
+	// Test empty query returns all data
+	allData := registry.GetTableData(apps)
+	searchData := registry.SearchTableData(apps, "")
+	if len(searchData) != len(allData) {
+		t.Error("empty search should return all data")
+	}
+	
+	// Test search with specific term
+	searchResults := registry.SearchTableData(apps, "move")
+	if len(searchResults) <= 1 { // should have more than just header
+		t.Error("search for \"move\" should return results")
+	}
+	
+	// Verify header is preserved
+	if len(searchResults) > 0 {
+		if searchResults[0][0] != "Shortcut" {
+			t.Error("header should be preserved in search results")
+		}
+	}
+	
+	// Test search with no matches
+	noResults := registry.SearchTableData(apps, "nonexistentterm")
+	if len(noResults) != 1 { // should only have header
+		t.Error("search with no matches should return only header")
+	}
+}
+
+func TestRegistry_ShortcutMatches(t *testing.T) {
+	registry := NewRegistry("")
+	
+	shortcut := Shortcut{
+		Keys:        "k",
+		Description: "move up",
+		Category:    "navigation",
+	}
+	
+	testCases := []struct {
+		query    string
+		expected bool
+	}{
+		{"k", true},        // matches keys
+		{"K", true},        // case insensitive keys
+		{"move", true},     // matches description
+		{"MOVE", true},     // case insensitive description
+		{"nav", true},      // matches category
+		{"NAVIGATION", true}, // case insensitive category
+		{"xyz", false},     // no match
+		{"", true},         // empty query matches everything
+	}
+	
+	for _, tc := range testCases {
+		result := registry.shortcutMatches(shortcut, tc.query)
+		if result != tc.expected {
+			t.Errorf("shortcutMatches(%q) = %v, want %v", tc.query, result, tc.expected)
+		}
+	}
+}
+
+func TestRegistry_SearchShortcuts(t *testing.T) {
+	registry := NewRegistry("")
+	
+	// Test search that should return results
+	results := registry.SearchShortcuts("move")
+	if len(results) == 0 {
+		t.Error("search for \"move\" should return results")
+	}
+	
+	// Check result structure
+	if len(results) > 0 {
+		result := results[0]
+		if result.AppName == "" {
+			t.Error("result should have app name")
+		}
+		if result.Shortcut.Keys == "" {
+			t.Error("result should have shortcut with keys")
+		}
+		if len(result.Matches) == 0 {
+			t.Error("result should have match indicators")
+		}
+	}
+	
+	// Test search with no results
+	noResults := registry.SearchShortcuts("nonexistentterm")
+	if len(noResults) != 0 {
+		t.Error("search with no matches should return empty slice")
+	}
+}
+
