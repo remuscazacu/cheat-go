@@ -8,13 +8,17 @@ import (
 
 // TableRenderer handles the rendering of tabular data
 type TableRenderer struct {
-	theme *Theme
+	theme      *Theme
+	tableStyle string
+	maxWidth   int
 }
 
 // NewTableRenderer creates a new table renderer with the given theme
 func NewTableRenderer(theme *Theme) *TableRenderer {
 	return &TableRenderer{
-		theme: theme,
+		theme:      theme,
+		tableStyle: theme.TableStyle,
+		maxWidth:   120, // default max width
 	}
 }
 
@@ -76,6 +80,16 @@ func (r *TableRenderer) Render(rows [][]string, cursorX, cursorY int) string {
 // GetTheme returns the current theme
 func (r *TableRenderer) GetTheme() *Theme {
 	return r.theme
+}
+
+// SetTableStyle sets the table style
+func (r *TableRenderer) SetTableStyle(style string) {
+	r.tableStyle = style
+}
+
+// SetMaxWidth sets the maximum table width
+func (r *TableRenderer) SetMaxWidth(width int) {
+	r.maxWidth = width
 }
 
 // highlightSearchTerm highlights search terms in the given text

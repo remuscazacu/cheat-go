@@ -414,7 +414,7 @@ func TestModel_Update_KeyTypes(t *testing.T) {
 
 // Test search functionality
 func TestSearchFunctionality(t *testing.T) {
-	m := initialModel()
+	m := initialModelWithDefaults()
 
 	// Test entering search mode
 	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}}
@@ -433,7 +433,7 @@ func TestSearchFunctionality(t *testing.T) {
 }
 
 func TestSearchInput(t *testing.T) {
-	m := initialModel()
+	m := initialModelWithDefaults()
 	m.searchMode = true
 
 	// Test adding characters to search query
@@ -462,7 +462,7 @@ func TestSearchInput(t *testing.T) {
 }
 
 func TestSearchEscape(t *testing.T) {
-	m := initialModel()
+	m := initialModelWithDefaults()
 	m.searchMode = true
 	m.searchQuery = "test"
 
@@ -483,7 +483,7 @@ func TestSearchEscape(t *testing.T) {
 }
 
 func TestSearchEnter(t *testing.T) {
-	m := initialModel()
+	m := initialModelWithDefaults()
 	m.searchMode = true
 	m.searchQuery = "vim"
 
@@ -529,7 +529,7 @@ func TestContainsIgnoreCase(t *testing.T) {
 }
 
 func TestFilterRowsBySearch(t *testing.T) {
-	m := initialModel()
+	m := initialModelWithDefaults()
 
 	// Set up test data
 	m.allRows = [][]string{
@@ -568,7 +568,7 @@ func TestFilterRowsBySearch(t *testing.T) {
 }
 
 func TestSearchView(t *testing.T) {
-	m := initialModel()
+	m := initialModelWithDefaults()
 
 	// Test normal view
 	view := m.View()
@@ -589,7 +589,7 @@ func TestSearchView(t *testing.T) {
 }
 
 func TestSearchUIEnhancements(t *testing.T) {
-	m := initialModel()
+	m := initialModelWithDefaults()
 	
 	// Test filter status display
 	m.allRows = [][]string{
@@ -620,7 +620,7 @@ func TestSearchUIEnhancements(t *testing.T) {
 }
 
 func TestEscapeClearSearch(t *testing.T) {
-	m := initialModel()
+	m := initialModelWithDefaults()
 	m.allRows = [][]string{
 		{"Shortcut", "vim"},
 		{"k", "↑ move"},
@@ -648,7 +648,7 @@ func TestEscapeClearSearch(t *testing.T) {
 }
 
 func TestSearchModeStyledView(t *testing.T) {
-	m := initialModel()
+	m := initialModelWithDefaults()
 	m.searchMode = true
 	m.searchQuery = "test"
 	
@@ -666,7 +666,7 @@ func TestSearchModeStyledView(t *testing.T) {
 
 
 func TestAppFiltering(t *testing.T) {
-	m := initialModel()
+	m := initialModelWithDefaults()
 	
 	// Test entering filter mode
 	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'f'}}
@@ -682,7 +682,7 @@ func TestAppFiltering(t *testing.T) {
 }
 
 func TestFilterInput(t *testing.T) {
-	m := initialModel()
+	m := initialModelWithDefaults()
 	m.filterMode = true
 	m.allApps = []string{"vim", "zsh", "dwm"}
 	
@@ -714,7 +714,7 @@ func TestFilterInput(t *testing.T) {
 }
 
 func TestFilterSelectAll(t *testing.T) {
-	m := initialModel()
+	m := initialModelWithDefaults()
 	m.filterMode = true
 	m.allApps = []string{"vim", "zsh", "dwm"}
 	
@@ -732,7 +732,7 @@ func TestFilterSelectAll(t *testing.T) {
 }
 
 func TestFilterClear(t *testing.T) {
-	m := initialModel()
+	m := initialModelWithDefaults()
 	m.filterMode = true
 	m.allApps = []string{"vim", "zsh", "dwm"}
 	m.filteredApps = []string{"vim", "zsh"}
@@ -751,7 +751,7 @@ func TestFilterClear(t *testing.T) {
 }
 
 func TestIsAppSelected(t *testing.T) {
-	m := initialModel()
+	m := initialModelWithDefaults()
 	m.filteredApps = []string{"vim", "zsh"}
 	
 	if !m.isAppSelected("vim") {
@@ -766,7 +766,7 @@ func TestIsAppSelected(t *testing.T) {
 }
 
 func TestFilterModeView(t *testing.T) {
-	m := initialModel()
+	m := initialModelWithDefaults()
 	m.filterMode = true
 	m.allApps = []string{"vim", "zsh"}
 	m.filteredApps = []string{"vim"}
@@ -788,7 +788,7 @@ func TestFilterModeView(t *testing.T) {
 
 
 func TestKeyboardShortcuts(t *testing.T) {
-	m := initialModel()
+	m := initialModelWithDefaults()
 	
 	// Test help mode
 	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'?'}}
@@ -813,7 +813,7 @@ func TestKeyboardShortcuts(t *testing.T) {
 }
 
 func TestRefreshShortcut(t *testing.T) {
-	m := initialModel()
+	m := initialModelWithDefaults()
 	
 	// Test refresh shortcut
 	msg := tea.KeyMsg{Type: tea.KeyCtrlR}
@@ -829,7 +829,7 @@ func TestRefreshShortcut(t *testing.T) {
 }
 
 func TestHomeEndShortcuts(t *testing.T) {
-	m := initialModel()
+	m := initialModelWithDefaults()
 	m.rows = [][]string{
 		{"Header"},
 		{"Row1"},
@@ -864,7 +864,7 @@ func TestHomeEndShortcuts(t *testing.T) {
 }
 
 func TestAlternativeShortcuts(t *testing.T) {
-	m := initialModel()
+	m := initialModelWithDefaults()
 	
 	// Test Ctrl+F for filter mode
 	msg := tea.KeyMsg{Type: tea.KeyCtrlF}
@@ -880,7 +880,7 @@ func TestAlternativeShortcuts(t *testing.T) {
 }
 
 func TestSearchClearShortcut(t *testing.T) {
-	m := initialModel()
+	m := initialModelWithDefaults()
 	m.searchMode = true
 	m.searchQuery = "test query"
 	
@@ -899,7 +899,7 @@ func TestSearchClearShortcut(t *testing.T) {
 
 
 func TestSearchHighlighting(t *testing.T) {
-	m := initialModel()
+	m := initialModelWithDefaults()
 	m.lastSearch = "move"
 	m.rows = [][]string{
 		{"Shortcut", "vim"},
@@ -925,7 +925,7 @@ func TestSearchHighlighting(t *testing.T) {
 }
 
 func TestLastSearchTracking(t *testing.T) {
-	m := initialModel()
+	m := initialModelWithDefaults()
 	m.searchMode = true
 	m.searchQuery = "test"
 	
