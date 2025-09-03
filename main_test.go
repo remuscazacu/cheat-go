@@ -11,9 +11,10 @@ import (
 
 	"cheat-go/pkg/config"
 	"cheat-go/pkg/notes"
+	"cheat-go/pkg/ui"
 )
 
-func initialModelWithDefaults() model {
+func initialModelWithDefaults() ui.Model {
 	opts := cliOptions{
 		theme:      "",
 		tableStyle: "",
@@ -30,38 +31,38 @@ func TestInitialModel(t *testing.T) {
 	// Test basic model initialization
 	m := initialModelWithDefaults()
 
-	if m.registry == nil {
+	if m.Registry == nil {
 		t.Error("model should have registry initialized")
 	}
 
-	if m.config == nil {
+	if m.Config == nil {
 		t.Error("model should have config initialized")
 	}
 
-	if m.renderer == nil {
+	if m.Renderer == nil {
 		t.Error("model should have renderer initialized")
 	}
 
-	if m.rows == nil {
+	if m.Rows == nil {
 		t.Error("model should have rows initialized")
 	}
 
 	// Test initial cursor position
-	if m.cursorX != 0 {
-		t.Errorf("initial cursorX = %d, expected 0", m.cursorX)
+	if m.CursorX != 0 {
+		t.Errorf("initial cursorX = %d, expected 0", m.CursorX)
 	}
 
-	if m.cursorY != 1 {
-		t.Errorf("initial cursorY = %d, expected 1", m.cursorY)
+	if m.CursorY != 1 {
+		t.Errorf("initial cursorY = %d, expected 1", m.CursorY)
 	}
 
 	// Test that table data is populated
-	if len(m.rows) == 0 {
+	if len(m.Rows) == 0 {
 		t.Error("model should have table data")
 	}
 
 	// Test header row
-	if len(m.rows) > 0 && len(m.rows[0]) == 0 {
+	if len(m.Rows) > 0 && len(m.Rows[0]) == 0 {
 		t.Error("header row should not be empty")
 	}
 }
@@ -93,12 +94,12 @@ func TestInitialModel_WithConfigFile(t *testing.T) {
 
 	m := initialModelWithDefaults()
 
-	if len(m.config.Apps) != 2 {
-		t.Errorf("expected 2 apps from config, got %d", len(m.config.Apps))
+	if len(m.Config.Apps) != 2 {
+		t.Errorf("expected 2 apps from config, got %d", len(m.Config.Apps))
 	}
 
-	if m.config.Theme != "dark" {
-		t.Errorf("expected dark theme from config, got %s", m.config.Theme)
+	if m.Config.Theme != "dark" {
+		t.Errorf("expected dark theme from config, got %s", m.Config.Theme)
 	}
 }
 
@@ -139,8 +140,8 @@ func TestModel_Update_Quit(t *testing.T) {
 
 func TestModel_Update_Navigation(t *testing.T) {
 	m := initialModelWithDefaults()
-	originalY := m.cursorY
-	originalX := m.cursorX
+	originalY := m.CursorY
+	originalX := m.CursorX
 
 	// Test down movement
 	downMsg := tea.KeyMsg{Type: tea.KeyDown}
@@ -150,35 +151,35 @@ func TestModel_Update_Navigation(t *testing.T) {
 		t.Error("navigation should not return command")
 	}
 
-	m = newModel.(model)
-	if m.cursorY <= originalY && len(m.rows) > originalY+1 {
+	m = newModel.(ui.Model)
+	if m.CursorY <= originalY && len(m.Rows) > originalY+1 {
 		t.Error("down key should move cursor down")
 	}
 
 	// Test up movement
 	upMsg := tea.KeyMsg{Type: tea.KeyUp}
 	newModel, _ = m.Update(upMsg)
-	m = newModel.(model)
+	m = newModel.(ui.Model)
 
-	if m.cursorY != originalY && m.cursorY > 1 {
+	if m.CursorY != originalY && m.CursorY > 1 {
 		t.Error("up key should move cursor up")
 	}
 
 	// Test right movement
 	rightMsg := tea.KeyMsg{Type: tea.KeyRight}
 	newModel, _ = m.Update(rightMsg)
-	m = newModel.(model)
+	m = newModel.(ui.Model)
 
-	if m.cursorX <= originalX && len(m.rows[0]) > originalX+1 {
+	if m.CursorX <= originalX && len(m.Rows[0]) > originalX+1 {
 		t.Error("right key should move cursor right")
 	}
 
 	// Test left movement
 	leftMsg := tea.KeyMsg{Type: tea.KeyLeft}
 	newModel, _ = m.Update(leftMsg)
-	m = newModel.(model)
+	m = newModel.(ui.Model)
 
-	if m.cursorX != originalX && m.cursorX > 0 {
+	if m.CursorX != originalX && m.CursorX > 0 {
 		t.Error("left key should move cursor left")
 	}
 }
@@ -192,35 +193,35 @@ func TestModel_Update_VimNavigation(t *testing.T) {
 	hMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'h'}}
 	lMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'l'}}
 
-	originalY := m.cursorY
+	originalY := m.CursorY
 
 	// Test 'j' (down)
 	newModel, _ := m.Update(jMsg)
-	m = newModel.(model)
-	if m.cursorY <= originalY && len(m.rows) > originalY+1 {
+	m = newModel.(ui.Model)
+	if m.CursorY <= originalY && len(m.Rows) > originalY+1 {
 		t.Error("'j' should move cursor down")
 	}
 
 	// Test 'k' (up)
 	newModel, _ = m.Update(kMsg)
-	m = newModel.(model)
-	if m.cursorY != originalY && m.cursorY > 1 {
+	m = newModel.(ui.Model)
+	if m.CursorY != originalY && m.CursorY > 1 {
 		t.Error("'k' should move cursor up")
 	}
 
-	originalX := m.cursorX
+	originalX := m.CursorX
 
 	// Test 'l' (right)
 	newModel, _ = m.Update(lMsg)
-	m = newModel.(model)
-	if m.cursorX <= originalX && len(m.rows[0]) > originalX+1 {
+	m = newModel.(ui.Model)
+	if m.CursorX <= originalX && len(m.Rows[0]) > originalX+1 {
 		t.Error("'l' should move cursor right")
 	}
 
 	// Test 'h' (left)
 	newModel, _ = m.Update(hMsg)
-	m = newModel.(model)
-	if m.cursorX != originalX && m.cursorX > 0 {
+	m = newModel.(ui.Model)
+	if m.CursorX != originalX && m.CursorX > 0 {
 		t.Error("'h' should move cursor left")
 	}
 }
@@ -229,50 +230,50 @@ func TestModel_Update_Boundaries(t *testing.T) {
 	m := initialModelWithDefaults()
 
 	// Move cursor to top-left
-	m.cursorX = 0
-	m.cursorY = 1 // Header is row 0, data starts at 1
+	m.CursorX = 0
+	m.CursorY = 1 // Header is row 0, data starts at 1
 
 	// Test left boundary
 	leftMsg := tea.KeyMsg{Type: tea.KeyLeft}
 	newModel, _ := m.Update(leftMsg)
-	m = newModel.(model)
-	if m.cursorX != 0 {
+	m = newModel.(ui.Model)
+	if m.CursorX != 0 {
 		t.Error("cursor should not move left from left boundary")
 	}
 
 	// Test up boundary
 	upMsg := tea.KeyMsg{Type: tea.KeyUp}
 	newModel, _ = m.Update(upMsg)
-	m = newModel.(model)
-	if m.cursorY != 1 {
+	m = newModel.(ui.Model)
+	if m.CursorY != 1 {
 		t.Error("cursor should not move up from top boundary")
 	}
 
 	// Move cursor to bottom-right
-	m.cursorX = len(m.rows[0]) - 1
-	m.cursorY = len(m.rows) - 1
+	m.CursorX = len(m.Rows[0]) - 1
+	m.CursorY = len(m.Rows) - 1
 
 	// Test right boundary
 	rightMsg := tea.KeyMsg{Type: tea.KeyRight}
 	newModel, _ = m.Update(rightMsg)
-	m = newModel.(model)
-	if m.cursorX != len(m.rows[0])-1 {
+	m = newModel.(ui.Model)
+	if m.CursorX != len(m.Rows[0])-1 {
 		t.Error("cursor should not move right from right boundary")
 	}
 
 	// Test down boundary
 	downMsg := tea.KeyMsg{Type: tea.KeyDown}
 	newModel, _ = m.Update(downMsg)
-	m = newModel.(model)
-	if m.cursorY != len(m.rows)-1 {
+	m = newModel.(ui.Model)
+	if m.CursorY != len(m.Rows)-1 {
 		t.Error("cursor should not move down from bottom boundary")
 	}
 }
 
 func TestModel_Update_UnknownKey(t *testing.T) {
 	m := initialModelWithDefaults()
-	originalX := m.cursorX
-	originalY := m.cursorY
+	originalX := m.CursorX
+	originalY := m.CursorY
 
 	// Test unknown key
 	unknownMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}}
@@ -282,8 +283,8 @@ func TestModel_Update_UnknownKey(t *testing.T) {
 		t.Error("unknown key should not return command")
 	}
 
-	m = newModel.(model)
-	if m.cursorX != originalX || m.cursorY != originalY {
+	m = newModel.(ui.Model)
+	if m.CursorX != originalX || m.CursorY != originalY {
 		t.Error("unknown key should not change cursor position")
 	}
 }
@@ -325,7 +326,7 @@ func TestModel_Integration(t *testing.T) {
 		if cmd != nil {
 			t.Error("navigation should not produce commands")
 		}
-		m = newModel.(model)
+		m = newModel.(ui.Model)
 	}
 
 	// Model should still be functional
@@ -337,7 +338,7 @@ func TestModel_Integration(t *testing.T) {
 
 func TestModel_EmptyTable(t *testing.T) {
 	m := initialModelWithDefaults()
-	m.rows = [][]string{} // Force empty table
+	m.Rows = [][]string{} // Force empty table
 
 	view := m.View()
 	// Should handle empty table gracefully
@@ -348,14 +349,14 @@ func TestModel_EmptyTable(t *testing.T) {
 
 func TestModel_SingleRowTable(t *testing.T) {
 	m := initialModelWithDefaults()
-	m.rows = [][]string{{"Header"}} // Only header
+	m.Rows = [][]string{{"Header"}} // Only header
 
 	// Navigation should handle single row gracefully
 	downMsg := tea.KeyMsg{Type: tea.KeyDown}
 	newModel, _ := m.Update(downMsg)
-	m = newModel.(model)
+	m = newModel.(ui.Model)
 
-	if m.cursorY != 1 { // Should stay at row 1 (since no data rows)
+	if m.CursorY != 1 { // Should stay at row 1 (since no data rows)
 		t.Error("cursor should handle single row table")
 	}
 }
@@ -364,28 +365,28 @@ func TestModel_Structure(t *testing.T) {
 	m := initialModelWithDefaults()
 
 	// Test model structure
-	if m.registry == nil {
+	if m.Registry == nil {
 		t.Error("registry should not be nil")
 	}
 
-	if m.config == nil {
+	if m.Config == nil {
 		t.Error("config should not be nil")
 	}
 
-	if m.renderer == nil {
+	if m.Renderer == nil {
 		t.Error("renderer should not be nil")
 	}
 
-	if m.rows == nil {
+	if m.Rows == nil {
 		t.Error("rows should not be nil")
 	}
 
 	// Test that rows have expected structure (header + data)
-	if len(m.rows) < 1 {
+	if len(m.Rows) < 1 {
 		t.Error("should have at least header row")
 	}
 
-	if len(m.rows[0]) == 0 {
+	if len(m.Rows[0]) == 0 {
 		t.Error("header row should not be empty")
 	}
 }
@@ -437,18 +438,18 @@ func TestSearchFunctionality(t *testing.T) {
 		t.Error("entering search mode should not return command")
 	}
 
-	updatedModel := newModel.(model)
-	if !updatedModel.searchMode {
+	updatedModel := newModel.(ui.Model)
+	if !updatedModel.SearchMode {
 		t.Error("should enter search mode when '/' is pressed")
 	}
-	if updatedModel.searchQuery != "" {
+	if updatedModel.SearchQuery != "" {
 		t.Error("search query should be empty when entering search mode")
 	}
 }
 
 func TestSearchInput(t *testing.T) {
 	m := initialModelWithDefaults()
-	m.searchMode = true
+	m.SearchMode = true
 
 	// Test adding characters to search query
 	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'v'}}
@@ -457,9 +458,9 @@ func TestSearchInput(t *testing.T) {
 		t.Error("adding to search query should not return command")
 	}
 
-	updatedModel := newModel.(model)
-	if updatedModel.searchQuery != "v" {
-		t.Errorf("search query should be 'v', got '%s'", updatedModel.searchQuery)
+	updatedModel := newModel.(ui.Model)
+	if updatedModel.SearchQuery != "v" {
+		t.Errorf("search query should be 'v', got '%s'", updatedModel.SearchQuery)
 	}
 
 	// Test backspace
@@ -469,16 +470,16 @@ func TestSearchInput(t *testing.T) {
 		t.Error("backspace should not return command")
 	}
 
-	updatedModel = newModel.(model)
-	if updatedModel.searchQuery != "" {
-		t.Errorf("search query should be empty after backspace, got '%s'", updatedModel.searchQuery)
+	updatedModel = newModel.(ui.Model)
+	if updatedModel.SearchQuery != "" {
+		t.Errorf("search query should be empty after backspace, got '%s'", updatedModel.SearchQuery)
 	}
 }
 
 func TestSearchEscape(t *testing.T) {
 	m := initialModelWithDefaults()
-	m.searchMode = true
-	m.searchQuery = "test"
+	m.SearchMode = true
+	m.SearchQuery = "test"
 
 	// Test escape exits search mode
 	msg := tea.KeyMsg{Type: tea.KeyEsc}
@@ -487,19 +488,19 @@ func TestSearchEscape(t *testing.T) {
 		t.Error("escape should not return command")
 	}
 
-	updatedModel := newModel.(model)
-	if updatedModel.searchMode {
+	updatedModel := newModel.(ui.Model)
+	if updatedModel.SearchMode {
 		t.Error("escape should exit search mode")
 	}
-	if updatedModel.searchQuery != "" {
+	if updatedModel.SearchQuery != "" {
 		t.Error("escape should clear search query")
 	}
 }
 
 func TestSearchEnter(t *testing.T) {
 	m := initialModelWithDefaults()
-	m.searchMode = true
-	m.searchQuery = "vim"
+	m.SearchMode = true
+	m.SearchQuery = "vim"
 
 	// Test enter confirms search
 	msg := tea.KeyMsg{Type: tea.KeyEnter}
@@ -508,12 +509,12 @@ func TestSearchEnter(t *testing.T) {
 		t.Error("enter should not return command")
 	}
 
-	updatedModel := newModel.(model)
-	if updatedModel.searchMode {
+	updatedModel := newModel.(ui.Model)
+	if updatedModel.SearchMode {
 		t.Error("enter should exit search mode")
 	}
 	// Should have filtered results
-	if len(updatedModel.rows) == len(m.allRows) {
+	if len(updatedModel.Rows) == len(m.AllRows) {
 		t.Error("search should filter results")
 	}
 }
@@ -546,7 +547,7 @@ func TestFilterRowsBySearch(t *testing.T) {
 	m := initialModelWithDefaults()
 
 	// Set up test data
-	m.allRows = [][]string{
+	m.AllRows = [][]string{
 		{"Shortcut", "vim", "zsh"},
 		{"k", "↑ move", "up history"},
 		{"j", "↓ move", "down history"},
@@ -554,27 +555,27 @@ func TestFilterRowsBySearch(t *testing.T) {
 	}
 
 	// Test empty query returns all rows
-	filtered := m.filterRowsBySearch("")
-	if len(filtered) != len(m.allRows) {
+	filtered := m.FilterRowsBySearch("")
+	if len(filtered) != len(m.AllRows) {
 		t.Error("empty query should return all rows")
 	}
 
 	// Test filtering by "move"
-	filtered = m.filterRowsBySearch("move")
+	filtered = m.FilterRowsBySearch("move")
 	expectedCount := 3 // header + 2 move commands
 	if len(filtered) != expectedCount {
 		t.Errorf("search for 'move' should return %d rows, got %d", expectedCount, len(filtered))
 	}
 
 	// Test filtering by "quit"
-	filtered = m.filterRowsBySearch("quit")
+	filtered = m.FilterRowsBySearch("quit")
 	expectedCount = 2 // header + 1 quit command
 	if len(filtered) != expectedCount {
 		t.Errorf("search for 'quit' should return %d rows, got %d", expectedCount, len(filtered))
 	}
 
 	// Test no matches
-	filtered = m.filterRowsBySearch("nonexistent")
+	filtered = m.FilterRowsBySearch("nonexistent")
 	expectedCount = 1 // just header
 	if len(filtered) != expectedCount {
 		t.Errorf("search for nonexistent term should return %d row (header only), got %d", expectedCount, len(filtered))
@@ -591,8 +592,8 @@ func TestSearchView(t *testing.T) {
 	}
 
 	// Test search mode view
-	m.searchMode = true
-	m.searchQuery = "test"
+	m.SearchMode = true
+	m.SearchQuery = "test"
 	view = m.View()
 	if !strings.Contains(view, "Search: test_") {
 		t.Error("search mode view should show search query with cursor")
@@ -604,33 +605,33 @@ func TestSearchView(t *testing.T) {
 
 func TestSearchUIEnhancements(t *testing.T) {
 	m := initialModelWithDefaults()
-	m.allRows = [][]string{
+	m.AllRows = [][]string{
 		{"Shortcut", "Description"},
 		{"ctrl+c", "copy"},
 		{"ctrl+v", "paste"},
 	}
-	m.rows = [][]string{
+	m.Rows = [][]string{
 		{"Shortcut", "Description"},
 		{"ctrl+c", "copy"},
 	}
 
 	// Test that filtered rows are set correctly
-	if len(m.rows) != 2 {
+	if len(m.Rows) != 2 {
 		t.Error("should have 2 rows when filtered")
 	}
-	if len(m.allRows) != 3 {
+	if len(m.AllRows) != 3 {
 		t.Error("should have 3 total rows")
 	}
 }
 
 func TestEscapeClearSearch(t *testing.T) {
 	m := initialModelWithDefaults()
-	m.allRows = [][]string{
+	m.AllRows = [][]string{
 		{"Shortcut", "vim"},
 		{"k", "↑ move"},
 		{"q", "quit"},
 	}
-	m.rows = [][]string{
+	m.Rows = [][]string{
 		{"Shortcut", "vim"},
 		{"k", "↑ move"},
 	}
@@ -642,19 +643,19 @@ func TestEscapeClearSearch(t *testing.T) {
 		t.Error("escape should not return command")
 	}
 
-	updatedModel := newModel.(model)
-	if len(updatedModel.rows) != len(m.allRows) {
+	updatedModel := newModel.(ui.Model)
+	if len(updatedModel.Rows) != len(m.AllRows) {
 		t.Error("escape should restore all rows")
 	}
-	if updatedModel.cursorY != 1 {
+	if updatedModel.CursorY != 1 {
 		t.Error("escape should reset cursor position")
 	}
 }
 
 func TestSearchModeStyledView(t *testing.T) {
 	m := initialModelWithDefaults()
-	m.searchMode = true
-	m.searchQuery = "test"
+	m.SearchMode = true
+	m.SearchQuery = "test"
 
 	view := m.View()
 	if !strings.Contains(view, "Search:") {
@@ -678,16 +679,16 @@ func TestAppFiltering(t *testing.T) {
 		t.Error("entering filter mode should not return command")
 	}
 
-	updatedModel := newModel.(model)
-	if !updatedModel.filterMode {
+	updatedModel := newModel.(ui.Model)
+	if !updatedModel.FilterMode {
 		t.Error("should enter filter mode when \"f\" is pressed")
 	}
 }
 
 func TestFilterInput(t *testing.T) {
 	m := initialModelWithDefaults()
-	m.filterMode = true
-	m.allApps = []string{"vim", "zsh", "dwm"}
+	m.FilterMode = true
+	m.AllApps = []string{"vim", "zsh", "dwm"}
 
 	// Test selecting app by number
 	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'1'}}
@@ -696,11 +697,11 @@ func TestFilterInput(t *testing.T) {
 		t.Error("selecting app should not return command")
 	}
 
-	updatedModel := newModel.(model)
-	if len(updatedModel.filteredApps) != 1 {
+	updatedModel := newModel.(ui.Model)
+	if len(updatedModel.FilteredApps) != 1 {
 		t.Error("should add app to filtered list")
 	}
-	if updatedModel.filteredApps[0] != "vim" {
+	if updatedModel.FilteredApps[0] != "vim" {
 		t.Error("should add correct app to filtered list")
 	}
 
@@ -710,16 +711,16 @@ func TestFilterInput(t *testing.T) {
 		t.Error("toggling app should not return command")
 	}
 
-	updatedModel = newModel.(model)
-	if len(updatedModel.filteredApps) != 0 {
+	updatedModel = newModel.(ui.Model)
+	if len(updatedModel.FilteredApps) != 0 {
 		t.Error("should remove app from filtered list when toggled")
 	}
 }
 
 func TestFilterSelectAll(t *testing.T) {
 	m := initialModelWithDefaults()
-	m.filterMode = true
-	m.allApps = []string{"vim", "zsh", "dwm"}
+	m.FilterMode = true
+	m.AllApps = []string{"vim", "zsh", "dwm"}
 
 	// Test select all
 	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}}
@@ -728,17 +729,17 @@ func TestFilterSelectAll(t *testing.T) {
 		t.Error("select all should not return command")
 	}
 
-	updatedModel := newModel.(model)
-	if len(updatedModel.filteredApps) != len(m.allApps) {
+	updatedModel := newModel.(ui.Model)
+	if len(updatedModel.FilteredApps) != len(m.AllApps) {
 		t.Error("select all should add all apps to filtered list")
 	}
 }
 
 func TestFilterClear(t *testing.T) {
 	m := initialModelWithDefaults()
-	m.filterMode = true
-	m.allApps = []string{"vim", "zsh", "dwm"}
-	m.filteredApps = []string{"vim", "zsh"}
+	m.FilterMode = true
+	m.AllApps = []string{"vim", "zsh", "dwm"}
+	m.FilteredApps = []string{"vim", "zsh"}
 
 	// Test clear
 	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'c'}}
@@ -747,32 +748,32 @@ func TestFilterClear(t *testing.T) {
 		t.Error("clear should not return command")
 	}
 
-	updatedModel := newModel.(model)
-	if len(updatedModel.filteredApps) != 0 {
+	updatedModel := newModel.(ui.Model)
+	if len(updatedModel.FilteredApps) != 0 {
 		t.Error("clear should remove all apps from filtered list")
 	}
 }
 
 func TestIsAppSelected(t *testing.T) {
 	m := initialModelWithDefaults()
-	m.filteredApps = []string{"vim", "zsh"}
+	m.FilteredApps = []string{"vim", "zsh"}
 
-	if !m.isAppSelected("vim") {
+	if !m.IsAppSelected("vim") {
 		t.Error("should return true for selected app")
 	}
-	if !m.isAppSelected("zsh") {
+	if !m.IsAppSelected("zsh") {
 		t.Error("should return true for selected app")
 	}
-	if m.isAppSelected("dwm") {
+	if m.IsAppSelected("dwm") {
 		t.Error("should return false for unselected app")
 	}
 }
 
 func TestFilterModeView(t *testing.T) {
 	m := initialModelWithDefaults()
-	m.filterMode = true
-	m.allApps = []string{"vim", "zsh"}
-	m.filteredApps = []string{"vim"}
+	m.FilterMode = true
+	m.AllApps = []string{"vim", "zsh"}
+	m.FilteredApps = []string{"vim"}
 
 	view := m.View()
 	if !strings.Contains(view, "Filter Apps:") {
@@ -799,8 +800,8 @@ func TestKeyboardShortcuts(t *testing.T) {
 		t.Error("entering help mode should not return command")
 	}
 
-	updatedModel := newModel.(model)
-	if !updatedModel.helpMode {
+	updatedModel := newModel.(ui.Model)
+	if !updatedModel.HelpMode {
 		t.Error("should enter help mode when ? is pressed")
 	}
 
@@ -824,21 +825,21 @@ func TestRefreshShortcut(t *testing.T) {
 		t.Error("refresh should not return command")
 	}
 
-	updatedModel := newModel.(model)
-	if updatedModel.cursorY != 1 {
+	updatedModel := newModel.(ui.Model)
+	if updatedModel.CursorY != 1 {
 		t.Error("refresh should reset cursor position")
 	}
 }
 
 func TestHomeEndShortcuts(t *testing.T) {
 	m := initialModelWithDefaults()
-	m.rows = [][]string{
+	m.Rows = [][]string{
 		{"Header"},
 		{"Row1"},
 		{"Row2"},
 		{"Row3"},
 	}
-	m.cursorY = 2
+	m.CursorY = 2
 
 	// Test home shortcut
 	msg := tea.KeyMsg{Type: tea.KeyHome}
@@ -847,8 +848,8 @@ func TestHomeEndShortcuts(t *testing.T) {
 		t.Error("home should not return command")
 	}
 
-	updatedModel := newModel.(model)
-	if updatedModel.cursorY != 1 {
+	updatedModel := newModel.(ui.Model)
+	if updatedModel.CursorY != 1 {
 		t.Error("home should go to first data row")
 	}
 
@@ -859,8 +860,8 @@ func TestHomeEndShortcuts(t *testing.T) {
 		t.Error("end should not return command")
 	}
 
-	updatedModel = newModel.(model)
-	if updatedModel.cursorY != 3 {
+	updatedModel = newModel.(ui.Model)
+	if updatedModel.CursorY != 3 {
 		t.Error("end should go to last row")
 	}
 }
@@ -871,8 +872,8 @@ func TestAlternativeShortcuts(t *testing.T) {
 	// Test Ctrl+F for filter
 	msg := tea.KeyMsg{Type: tea.KeyCtrlF}
 	newModel, _ := m.Update(msg)
-	updatedModel := newModel.(model)
-	if !updatedModel.filterMode {
+	updatedModel := newModel.(ui.Model)
+	if !updatedModel.FilterMode {
 		t.Error("Ctrl+F should enter filter mode")
 	}
 }
@@ -883,8 +884,8 @@ func TestViewModes(t *testing.T) {
 	// Test switching to notes view
 	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'n'}}
 	newModel, _ := m.Update(msg)
-	updatedModel := newModel.(model)
-	if updatedModel.viewMode != viewNotes {
+	updatedModel := newModel.(ui.Model)
+	if updatedModel.ViewMode != ui.ViewNotes {
 		t.Error("Should switch to notes view")
 	}
 
@@ -897,8 +898,8 @@ func TestViewModes(t *testing.T) {
 	// Test switching to plugins view
 	msg = tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'p'}}
 	newModel, _ = m.Update(msg)
-	updatedModel = newModel.(model)
-	if updatedModel.viewMode != viewPlugins {
+	updatedModel = newModel.(ui.Model)
+	if updatedModel.ViewMode != ui.ViewPlugins {
 		t.Error("Should switch to plugins view")
 	}
 
@@ -911,8 +912,8 @@ func TestViewModes(t *testing.T) {
 	// Test switching to online view
 	msg2 := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'o'}}
 	newModel2, _ := m.Update(msg2)
-	updatedModel2 := newModel2.(model)
-	if updatedModel2.viewMode != viewOnline {
+	updatedModel2 := newModel2.(ui.Model)
+	if updatedModel2.ViewMode != ui.ViewOnline {
 		t.Error("Should switch to online view")
 	}
 
@@ -925,8 +926,8 @@ func TestViewModes(t *testing.T) {
 	// Test switching to sync view
 	msg = tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'s'}}
 	newModel, _ = m.Update(msg)
-	updatedModel = newModel.(model)
-	if updatedModel.viewMode != viewSync {
+	updatedModel = newModel.(ui.Model)
+	if updatedModel.ViewMode != ui.ViewSync {
 		t.Error("Should switch to sync view")
 	}
 
@@ -939,34 +940,34 @@ func TestViewModes(t *testing.T) {
 
 func TestNotesViewInput(t *testing.T) {
 	m := initialModelWithDefaults()
-	m.viewMode = viewNotes
+	m.ViewMode = ui.ViewNotes
 
 	// Test navigation in notes view
 	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}}
 	newModel, _ := m.Update(msg)
-	updatedModel := newModel.(model)
+	updatedModel := newModel.(ui.Model)
 	// Navigation should work even with empty notes
 
 	// Test creating note
 	msg = tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'n'}}
 	newModel, _ = m.Update(msg)
-	updatedModel = newModel.(model)
-	if updatedModel.statusMessage == "" {
+	updatedModel = newModel.(ui.Model)
+	if updatedModel.StatusMessage == "" {
 		t.Error("Should show status message when creating note")
 	}
 
 	// Test escape to go back
 	msg = tea.KeyMsg{Type: tea.KeyEsc}
 	newModel, _ = m.Update(msg)
-	updatedModel = newModel.(model)
-	if updatedModel.viewMode != viewMain {
+	updatedModel = newModel.(ui.Model)
+	if updatedModel.ViewMode != ui.ViewMain {
 		t.Error("Escape should return to main view")
 	}
 }
 
 func TestPluginsViewInput(t *testing.T) {
 	m := initialModelWithDefaults()
-	m.viewMode = viewPlugins
+	m.ViewMode = ui.ViewPlugins
 
 	// Test navigation
 	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}}
@@ -976,78 +977,78 @@ func TestPluginsViewInput(t *testing.T) {
 	// Test reload
 	msg = tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}}
 	newModel, _ = m.Update(msg)
-	updatedModel := newModel.(model)
-	if updatedModel.statusMessage == "" {
+	updatedModel := newModel.(ui.Model)
+	if updatedModel.StatusMessage == "" {
 		t.Error("Should show status message when reloading plugins")
 	}
 
 	// Test escape
 	msg = tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}}
 	newModel, _ = m.Update(msg)
-	updatedModel = newModel.(model)
-	if updatedModel.viewMode != viewMain {
+	updatedModel = newModel.(ui.Model)
+	if updatedModel.ViewMode != ui.ViewMain {
 		t.Error("q should return to main view")
 	}
 }
 
 func TestOnlineViewInput(t *testing.T) {
 	m := initialModelWithDefaults()
-	m.viewMode = viewOnline
+	m.ViewMode = ui.ViewOnline
 
 	// Test navigation
 	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'k'}}
 	newModel, _ := m.Update(msg)
-	updatedModel := newModel.(model)
+	updatedModel := newModel.(ui.Model)
 	// Should handle gracefully
 
 	// Test search mode
 	msg = tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}}
 	newModel, _ = m.Update(msg)
-	updatedModel = newModel.(model)
-	if !updatedModel.searchMode {
+	updatedModel = newModel.(ui.Model)
+	if !updatedModel.SearchMode {
 		t.Error("/ should enter search mode in online view")
 	}
 
 	// Test escape
 	msg = tea.KeyMsg{Type: tea.KeyEsc}
 	newModel, _ = m.Update(msg)
-	updatedModel = newModel.(model)
-	if updatedModel.viewMode != viewMain {
+	updatedModel = newModel.(ui.Model)
+	if updatedModel.ViewMode != ui.ViewMain {
 		t.Error("Escape should return to main view")
 	}
 }
 
 func TestSyncViewInput(t *testing.T) {
 	m := initialModelWithDefaults()
-	m.viewMode = viewSync
+	m.ViewMode = ui.ViewSync
 
 	// Test trigger sync
 	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'s'}}
 	newModel, _ := m.Update(msg)
-	updatedModel := newModel.(model)
-	if updatedModel.statusMessage == "" {
+	updatedModel := newModel.(ui.Model)
+	if updatedModel.StatusMessage == "" {
 		t.Error("Should show status message when triggering sync")
 	}
 
 	// Test resolve conflicts
 	msg = tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}}
 	newModel, _ = m.Update(msg)
-	updatedModel = newModel.(model)
-	if updatedModel.statusMessage == "" {
+	updatedModel = newModel.(ui.Model)
+	if updatedModel.StatusMessage == "" {
 		t.Error("Should show status message when resolving conflicts")
 	}
 
 	// Test toggle auto-sync
 	msg = tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}}
 	newModel, _ = m.Update(msg)
-	updatedModel = newModel.(model)
+	updatedModel = newModel.(ui.Model)
 	// Should handle gracefully
 
 	// Test escape
 	msg = tea.KeyMsg{Type: tea.KeyEsc}
 	newModel, _ = m.Update(msg)
-	updatedModel = newModel.(model)
-	if updatedModel.viewMode != viewMain {
+	updatedModel = newModel.(ui.Model)
+	if updatedModel.ViewMode != ui.ViewMain {
 		t.Error("Escape should return to main view")
 	}
 }
@@ -1058,8 +1059,8 @@ func TestForceSync(t *testing.T) {
 	// Test Ctrl+S for force sync
 	msg := tea.KeyMsg{Type: tea.KeyCtrlS}
 	newModel, _ := m.Update(msg)
-	updatedModel := newModel.(model)
-	if updatedModel.statusMessage == "" {
+	updatedModel := newModel.(ui.Model)
+	if updatedModel.StatusMessage == "" {
 		t.Error("Ctrl+S should show sync status message")
 	}
 }
@@ -1085,8 +1086,8 @@ func TestPrintVersion(t *testing.T) {
 
 func TestSearchClearShortcut(t *testing.T) {
 	m := initialModelWithDefaults()
-	m.searchMode = true
-	m.searchQuery = "test query"
+	m.SearchMode = true
+	m.SearchQuery = "test query"
 
 	// Test Ctrl+U to clear search
 	msg := tea.KeyMsg{Type: tea.KeyCtrlU}
@@ -1095,21 +1096,21 @@ func TestSearchClearShortcut(t *testing.T) {
 		t.Error("ctrl+u should not return command")
 	}
 
-	updatedModel := newModel.(model)
-	if updatedModel.searchQuery != "" {
+	updatedModel := newModel.(ui.Model)
+	if updatedModel.SearchQuery != "" {
 		t.Error("ctrl+u should clear search query")
 	}
 }
 
 func TestSearchHighlighting(t *testing.T) {
 	m := initialModelWithDefaults()
-	m.lastSearch = "move"
-	m.rows = [][]string{
+	m.LastSearch = "move"
+	m.Rows = [][]string{
 		{"Shortcut", "vim"},
 		{"k", "↑ move"},
 		{"j", "↓ move"},
 	}
-	m.allRows = [][]string{
+	m.AllRows = [][]string{
 		{"Shortcut", "vim"},
 		{"k", "↑ move"},
 		{"j", "↓ move"},
@@ -1118,7 +1119,7 @@ func TestSearchHighlighting(t *testing.T) {
 
 	view := m.View()
 	// Should use highlighting when there is a search term and filtered results
-	if m.lastSearch != "" && len(m.rows) != len(m.allRows) {
+	if m.LastSearch != "" && len(m.Rows) != len(m.AllRows) {
 		// The highlighting is applied, but we cannot easily test the exact output
 		// since it contains ANSI escape codes. We just verify the view renders.
 		if view == "" {
@@ -1129,8 +1130,8 @@ func TestSearchHighlighting(t *testing.T) {
 
 func TestLastSearchTracking(t *testing.T) {
 	m := initialModelWithDefaults()
-	m.searchMode = true
-	m.searchQuery = "test"
+	m.SearchMode = true
+	m.SearchQuery = "test"
 
 	// Test that lastSearch is set when confirming search
 	msg := tea.KeyMsg{Type: tea.KeyEnter}
@@ -1139,21 +1140,21 @@ func TestLastSearchTracking(t *testing.T) {
 		t.Error("enter should not return command")
 	}
 
-	updatedModel := newModel.(model)
-	if updatedModel.lastSearch != "test" {
+	updatedModel := newModel.(ui.Model)
+	if updatedModel.LastSearch != "test" {
 		t.Error("should set lastSearch when confirming search")
 	}
 
 	// Test that lastSearch is cleared when escaping from search
-	updatedModel.searchMode = true
+	updatedModel.SearchMode = true
 	msg = tea.KeyMsg{Type: tea.KeyEsc}
 	newModel, cmd = updatedModel.Update(msg)
 	if cmd != nil {
 		t.Error("escape should not return command")
 	}
 
-	finalModel := newModel.(model)
-	if finalModel.lastSearch != "" {
+	finalModel := newModel.(ui.Model)
+	if finalModel.LastSearch != "" {
 		t.Error("should clear lastSearch when escaping from search")
 	}
 }
@@ -1178,7 +1179,7 @@ func TestOpenEditorForNote(t *testing.T) {
 	os.Setenv("EDITOR", "echo")
 
 	// Test the method
-	result, err := m.openEditorForNote(testNote)
+	result, err := m.OpenEditorForNote(testNote)
 
 	if err != nil {
 		t.Errorf("openEditorForNote should not return error with echo editor: %v", err)
@@ -1220,7 +1221,7 @@ func TestOpenEditorForNote_InvalidEditor(t *testing.T) {
 
 	os.Setenv("EDITOR", "nonexistent-editor-command-12345")
 
-	result, err := m.openEditorForNote(testNote)
+	result, err := m.OpenEditorForNote(testNote)
 
 	if err == nil {
 		t.Error("openEditorForNote should return error with invalid editor")
@@ -1248,7 +1249,7 @@ func TestOpenEditorForNote_DefaultEditor(t *testing.T) {
 
 	// Since nano might not be available and would be interactive,
 	// we'll test that the method attempts to use "nano" by checking the error message
-	_, err := m.openEditorForNote(testNote)
+	_, err := m.OpenEditorForNote(testNote)
 
 	// We expect an error since nano likely isn't available or would hang waiting for input
 	if err == nil {

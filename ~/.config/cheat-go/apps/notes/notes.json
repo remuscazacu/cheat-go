@@ -1,1 +1,54 @@
-[]
+[
+  {
+    "id": "note-1756904995318763258",
+    "title": "New Note 1756904995",
+    "content": "Enter your note content here",
+    "app_name": "",
+    "category": "general",
+    "tags": [
+      "new"
+    ],
+    "created_at": "2025-09-03T16:09:55.318763833+03:00",
+    "updated_at": "2025-09-03T16:09:55.318763904+03:00",
+    "is_favorite": false
+  },
+  {
+    "id": "note-1756905001667163936",
+    "title": "New Note 1756905001",
+    "content": "Enter your note content here",
+    "app_name": "",
+    "category": "general",
+    "tags": [
+      "new"
+    ],
+    "created_at": "2025-09-03T16:10:01.667164811+03:00",
+    "updated_at": "2025-09-03T16:10:01.667164943+03:00",
+    "is_favorite": false
+  },
+  {
+    "id": "note-1756904939419755410",
+    "title": "New Note 1756904939",
+    "content": "Enter your note content here",
+    "app_name": "",
+    "category": "general",
+    "tags": [
+      "new"
+    ],
+    "created_at": "2025-09-03T16:08:59.419755767+03:00",
+    "updated_at": "2025-09-03T16:08:59.419755819+03:00",
+    "is_favorite": false
+  },
+  {
+    "id": "note-1756904946478038577",
+    "title": "New Note 1756904946",
+    "content": "Enter your note content here",
+    "app_name": "",
+    "category": "general",
+    "tags": [
+      "new"
+    ],
+    "created_at": "2025-09-03T16:09:06.478039271+03:00",
+    "updated_at": "2025-09-03T16:09:06.478039348+03:00",
+    "is_favorite": false
+  }
+]

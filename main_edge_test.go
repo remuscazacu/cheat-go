@@ -8,6 +8,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"cheat-go/pkg/config"
+	"cheat-go/pkg/ui"
 )
 
 func TestInitialModel_ConfigLoadErrors(t *testing.T) {
@@ -26,17 +27,17 @@ func TestInitialModel_ConfigLoadErrors(t *testing.T) {
 	// Should still initialize successfully with warnings
 	m := initialModelWithDefaults()
 
-	if m.registry == nil {
+	if m.Registry == nil {
 		t.Error("should initialize registry even with config errors")
 	}
 
-	if m.config == nil {
+	if m.Config == nil {
 		t.Error("should initialize config even with invalid file")
 	}
 
 	// Should fallback to default config
 	defaultConfig := config.DefaultConfig()
-	if len(m.config.Apps) != len(defaultConfig.Apps) {
+	if len(m.Config.Apps) != len(defaultConfig.Apps) {
 		t.Error("should fallback to default config on invalid YAML")
 	}
 }
@@ -61,12 +62,12 @@ func TestInitialModel_AppLoadErrors(t *testing.T) {
 	// Should still initialize successfully
 	m := initialModelWithDefaults()
 
-	if m.registry == nil {
+	if m.Registry == nil {
 		t.Error("should initialize registry even with app load errors")
 	}
 
 	// Should have some table data (at least header)
-	if len(m.rows) == 0 {
+	if len(m.Rows) == 0 {
 		t.Error("should have at least header row")
 	}
 }
@@ -94,12 +95,12 @@ func TestInitialModel_ErrorLogging(t *testing.T) {
 	m := initialModelWithDefaults()
 
 	// Model should still be functional
-	if m.registry == nil || m.config == nil || m.renderer == nil {
+	if m.Registry == nil || m.Config == nil || m.Renderer == nil {
 		t.Error("model should be fully initialized despite warnings")
 	}
 
 	// Should have vim app (which exists in hardcoded data)
-	if _, exists := m.registry.Get("vim"); !exists {
+	if _, exists := m.Registry.Get("vim"); !exists {
 		t.Error("should have vim app from hardcoded data")
 	}
 }
@@ -117,18 +118,18 @@ func TestInitialModel_DefaultPaths(t *testing.T) {
 
 	// Should use all defaults
 	defaultConfig := config.DefaultConfig()
-	if m.config.Theme != defaultConfig.Theme {
+	if m.Config.Theme != defaultConfig.Theme {
 		t.Error("should use default theme")
 	}
 
-	if len(m.config.Apps) != len(defaultConfig.Apps) {
+	if len(m.Config.Apps) != len(defaultConfig.Apps) {
 		t.Error("should use default apps")
 	}
 
 	// Should have all hardcoded apps
 	expectedApps := []string{"vim", "zsh", "dwm", "st", "lf", "zathura"}
 	for _, appName := range expectedApps {
-		if _, exists := m.registry.Get(appName); !exists {
+		if _, exists := m.Registry.Get(appName); !exists {
 			t.Errorf("should have hardcoded app: %s", appName)
 		}
 	}
@@ -196,7 +197,7 @@ func TestModel_Update_ExtensiveKeyHandling(t *testing.T) {
 
 		// Update model for next test (except for quit commands)
 		if cmd == nil {
-			m = newModel.(model)
+			m = newModel.(ui.Model)
 		}
 	}
 }

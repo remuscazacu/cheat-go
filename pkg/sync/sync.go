@@ -350,7 +350,7 @@ func getOrCreateDeviceID(dataDir string) (string, error) {
 
 func generateDeviceID() string {
 	hostname, _ := os.Hostname()
-	timestamp := time.Now().Unix()
+	timestamp := time.Now().UnixNano()
 	data := fmt.Sprintf("%s-%d", hostname, timestamp)
 	hash := sha256.Sum256([]byte(data))
 	return hex.EncodeToString(hash[:16])
